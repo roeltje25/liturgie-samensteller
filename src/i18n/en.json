@@ -41,6 +41,7 @@
   "panel.service_info.leader_placeholder": "Enter name...",
 
   "button.add_song": "Add song",
+  "button.create_song": "Create new song",
   "button.add_generic": "Add generic",
   "button.add_offering": "Add offering",
   "button.add_algemeen": "Add general",
@@ -213,6 +214,7 @@
 
   "context.edit_fields": "Edit Fields...",
   "context.edit_youtube": "Edit YouTube Link...",
+  "context.duplicate": "Duplicate",
 
   "dialog.section.title": "Add section",
   "dialog.section.enter_name": "Enter section name:",
@@ -249,5 +251,20 @@
   "error.invalid_folder": "Invalid folder: {path}",
 
   "language.nl": "Nederlands",
-  "language.en": "English"
+  "language.en": "English",
+
+  "button.create_song": "Create new song",
+
+  "dialog.newsong.title": "Create new song",
+  "dialog.newsong.info": "Song information",
+  "dialog.newsong.song_title": "Song title:",
+  "dialog.newsong.title_placeholder": "Enter song title...",
+  "dialog.newsong.subfolder": "Category:",
+  "dialog.newsong.lyrics": "Lyrics",
+  "dialog.newsong.lyrics_hint": "Enter the lyrics below. Separate verses/choruses with a blank line. Each section will become a separate slide.",
+  "dialog.newsong.lyrics_placeholder": "Verse 1\nLine 1\nLine 2\n\nChorus\nChorus line 1\nChorus line 2",
+  "dialog.newsong.preview": "{count} slide(s) will be created",
+  "dialog.newsong.create": "Create song",
+  "dialog.newsong.folder_exists": "A song folder named '{name}' already exists. Overwrite?",
+  "dialog.newsong.error": "Could not create song: {error}"
 }

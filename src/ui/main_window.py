@@ -45,6 +45,7 @@ from ..i18n import tr, set_language, get_language, on_language_changed
 from .liturgy_list import LiturgyListWidget
 from .liturgy_tree import LiturgyTreeWidget
 from .song_picker import SongPickerDialog
+from .new_song_dialog import NewSongDialog
 from .generic_picker import GenericPickerDialog
 from .offering_picker import OfferingPickerDialog
 from .settings_dialog import SettingsDialog
@@ -165,6 +166,8 @@ class MainWindow(QMainWindow):
 
         self.btn_add_song = QPushButton()
         self.btn_add_song.setMinimumHeight(40)
+        self.btn_create_song = QPushButton()
+        self.btn_create_song.setMinimumHeight(40)
         self.btn_add_generic = QPushButton()
         self.btn_add_generic.setMinimumHeight(40)
         self.btn_add_offering = QPushButton()
@@ -177,6 +180,7 @@ class MainWindow(QMainWindow):
         self.btn_add_pptx.setMinimumHeight(40)
 
         add_layout.addWidget(self.btn_add_song)
+        add_layout.addWidget(self.btn_create_song)
         add_layout.addWidget(self.btn_add_generic)
         add_layout.addWidget(self.btn_add_offering)
         add_layout.addWidget(self.btn_add_from_theme)
@@ -322,6 +326,7 @@ class MainWindow(QMainWindow):
         """Connect all signals."""
         # Buttons
         self.btn_add_song.clicked.connect(self._on_add_song)
+        self.btn_create_song.clicked.connect(self._on_create_song)
         self.btn_add_generic.clicked.connect(self._on_add_generic)
         self.btn_add_offering.clicked.connect(self._on_add_offering)
         self.btn_add_from_theme.clicked.connect(self._on_add_from_theme)
@@ -413,6 +418,7 @@ class MainWindow(QMainWindow):
 
         # Buttons
         self.btn_add_song.setText(tr("button.add_song"))
+        self.btn_create_song.setText(tr("button.create_song"))
         self.btn_add_generic.setText(tr("button.add_generic"))
         self.btn_add_offering.setText(tr("button.add_offering"))
         self.btn_add_from_theme.setText(tr("button.add_from_theme"))
@@ -449,6 +455,43 @@ class MainWindow(QMainWindow):
                 self.liturgy_tree.set_liturgy(self.liturgy)
                 self.unsaved_changes = True
                 # YouTube search is now manual - user can use Edit button or double-click
+
+    def _on_create_song(self) -> None:
+        """Create a new song from lyrics and add to liturgy."""
+        dialog = NewSongDialog(self.settings, self.base_path, self)
+
+        if dialog.exec():
+            pptx_path = dialog.get_created_pptx()
+            folder_path = dialog.get_created_folder()
+
+            if pptx_path and folder_path:
+                # Create a SongLiturgyItem for the new song
+                from ..models import SongLiturgyItem
+                import os
+
+                # Get song title from folder name
+                title = os.path.basename(folder_path)
+
+                # Get relative path for source_path
+                songs_path = self.settings.get_songs_path(self.base_path)
+                try:
+                    relative_path = os.path.relpath(folder_path, songs_path)
+                except ValueError:
+                    relative_path = folder_path
+
+                item = SongLiturgyItem(
+                    title=title,
+                    source_path=relative_path,
+                    pptx_path=pptx_path,
+                    is_stub=False,
+                )
+
+                self.liturgy.add_item(item)
+                self.liturgy_tree.set_liturgy(self.liturgy)
+                self.unsaved_changes = True
+
+                # Refresh folder scanner cache
+                self.folder_scanner.clear_cache()
 
     def _on_add_generic(self) -> None:
         """Add a generic item to the liturgy."""
@@ -800,8 +843,9 @@ class MainWindow(QMainWindow):
 
         if file_path:
             try:
-                # Load with migration support
-                self.liturgy, was_migrated = Liturgy.load_with_migration(file_path)
+                # Load with migration support, resolving relative paths
+                effective_base = self.settings.get_effective_base_path(self.base_path)
+                self.liturgy, was_migrated = Liturgy.load_with_migration(file_path, effective_base)
                 self.current_file = file_path
                 self.unsaved_changes = was_migrated  # Mark as changed if migrated
                 self.liturgy_tree.set_liturgy(self.liturgy)
@@ -848,7 +892,9 @@ class MainWindow(QMainWindow):
     def _save_to_file(self, file_path: str) -> None:
         """Save liturgy to specified file."""
         try:
-            self.liturgy.save(file_path)
+            # Save with relative paths based on effective base path
+            effective_base = self.settings.get_effective_base_path(self.base_path)
+            self.liturgy.save(file_path, effective_base)
             self.current_file = file_path
             self.unsaved_changes = False
             self.status_label.setText(tr("status.ready"))

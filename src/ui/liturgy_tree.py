@@ -344,6 +344,7 @@ class LiturgyTreeWidget(QTreeWidget):
         item_type = item.data(0, Qt.ItemDataRole.UserRole)
 
         if item_type == self.ITEM_TYPE_SECTION:
+            menu.addAction(tr("context.duplicate"), self._duplicate_selected_section)
             menu.addAction(tr("menu.edit.delete"), self._delete_selected_section)
             menu.addSeparator()
             menu.addAction(tr("menu.edit.move_up"), self._move_section_up)
@@ -591,6 +592,33 @@ class LiturgyTreeWidget(QTreeWidget):
 
         self._update_display()
         self.order_changed.emit()
+
+    def _duplicate_selected_section(self) -> None:
+        """Duplicate the selected section."""
+        selected = self.selectedItems()
+        if not selected:
+            return
+
+        item = selected[0]
+        item_type = item.data(0, Qt.ItemDataRole.UserRole)
+
+        if item_type != self.ITEM_TYPE_SECTION:
+            return
+
+        section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+
+        if self._liturgy.sections:
+            # V2 mode - find and duplicate section
+            for i, section in enumerate(self._liturgy.sections):
+                if section.id == section_id:
+                    # Create a copy and insert after original
+                    copy = section.copy()
+                    copy.name = f"{section.name} (kopie)"
+                    self._liturgy.insert_section(i + 1, copy)
+                    break
+
+            self._update_display()
+            self.order_changed.emit()
 
     def _move_section_up(self) -> None:
         """Move selected section up."""

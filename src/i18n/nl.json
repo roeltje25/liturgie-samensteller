@@ -41,6 +41,7 @@
   "panel.service_info.leader_placeholder": "Voer naam in...",
 
   "button.add_song": "Lied toevoegen",
+  "button.create_song": "Nieuw lied maken",
   "button.add_generic": "Algemeen toevoegen",
   "button.add_offering": "Collecte toevoegen",
   "button.add_algemeen": "Algemeen toevoegen",
@@ -213,6 +214,7 @@
 
   "context.edit_fields": "Velden bewerken...",
   "context.edit_youtube": "YouTube link bewerken...",
+  "context.duplicate": "Dupliceren",
 
   "dialog.section.title": "Sectie toevoegen",
   "dialog.section.enter_name": "Voer sectienaam in:",
@@ -221,6 +223,19 @@
   "dialog.pptx.browse_title": "PowerPoint bestand selecteren",
   "dialog.pptx.enter_name": "Voer een naam in voor deze sectie:",
   "dialog.pptx.no_slides": "Geen dia's gevonden in het geselecteerde bestand.",
+
+  "dialog.newsong.title": "Nieuw lied maken",
+  "dialog.newsong.info": "Lied informatie",
+  "dialog.newsong.song_title": "Titel:",
+  "dialog.newsong.title_placeholder": "Voer de titel van het lied in",
+  "dialog.newsong.subfolder": "Categorie:",
+  "dialog.newsong.lyrics": "Tekst",
+  "dialog.newsong.lyrics_hint": "Voer de tekst in. Scheid coupletten/refreinen met een lege regel.",
+  "dialog.newsong.lyrics_placeholder": "Couplet 1\nRegel 1\nRegel 2\n\nRefrein\nRegel 1\nRegel 2",
+  "dialog.newsong.preview": "{count} dia('s) worden aangemaakt",
+  "dialog.newsong.create": "Lied aanmaken",
+  "dialog.newsong.folder_exists": "Map '{name}' bestaat al. Overschrijven?",
+  "dialog.newsong.error": "Fout bij aanmaken lied: {error}",
 
   "status.ready": "Gereed",
   "status.loading": "Laden...",

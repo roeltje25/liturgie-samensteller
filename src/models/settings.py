@@ -24,7 +24,7 @@ class Settings:
     language: str = "nl"
 
     # Excel registration
-    excel_register_path: str = ""  # Path to LiederenRegister.xlsx
+    excel_register_path: str = "./LiederenRegister.xlsx"
 
     # Window state
     window_width: int = 1200

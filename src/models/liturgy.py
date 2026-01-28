@@ -128,6 +128,17 @@ class LiturgySection:
 
         return section
 
+    def copy(self) -> "LiturgySection":
+        """Create a deep copy of this section with new IDs."""
+        # Use to_dict/from_dict for deep copy
+        data = self.to_dict()
+        # Generate new ID for section
+        data["id"] = generate_uuid()
+        # Generate new IDs for slides
+        for slide_data in data.get("slides", []):
+            slide_data["id"] = generate_uuid()
+        return LiturgySection.from_dict(data)
+
     @property
     def is_song(self) -> bool:
         """Check if this is a song section."""
@@ -613,26 +624,47 @@ class Liturgy:
 
         return section
 
-    def save(self, path: str) -> None:
-        """Save liturgy to JSON file."""
+    def save(self, path: str, base_path: Optional[str] = None) -> None:
+        """Save liturgy to JSON file.
+
+        If base_path is provided, paths are saved relative to it.
+        """
+        data = self.to_dict()
+
+        if base_path:
+            # Store the base path as metadata (for reference)
+            data["_saved_base_path"] = base_path
+            # Convert all paths to relative
+            self._convert_paths_in_dict(data, base_path, to_relative=True)
+
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
     @classmethod
-    def load(cls, path: str) -> "Liturgy":
-        """Load liturgy from JSON file."""
+    def load(cls, path: str, base_path: Optional[str] = None) -> "Liturgy":
+        """Load liturgy from JSON file.
+
+        If base_path is provided, relative paths are resolved to absolute.
+        """
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+        if base_path:
+            cls._convert_paths_in_dict(data, base_path, to_relative=False)
+
         return cls.from_dict(data)
 
     @classmethod
-    def load_with_migration(cls, path: str) -> tuple:
+    def load_with_migration(cls, path: str, base_path: Optional[str] = None) -> tuple:
         """
         Load liturgy from JSON file, migrating if needed.
         Returns (liturgy, was_migrated) tuple.
         """
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+        if base_path:
+            cls._convert_paths_in_dict(data, base_path, to_relative=False)
 
         format_version = data.get("format_version", 1)
         liturgy = cls.from_dict(data)
@@ -643,3 +675,57 @@ class Liturgy:
             return (liturgy, True)
 
         return (liturgy, False)
+
+    @classmethod
+    def _convert_paths_in_dict(cls, data: Dict[str, Any], base_path: str, to_relative: bool) -> None:
+        """Convert paths in the data dictionary between absolute and relative.
+
+        Args:
+            data: The dictionary to modify (in place)
+            base_path: The base path for relative path resolution
+            to_relative: If True, convert absolute to relative; if False, relative to absolute
+        """
+        # Path fields to convert
+        path_fields = ["source_path", "pptx_path", "pdf_path", "source_theme_path", "theme_source_path"]
+
+        def convert_path(p: Optional[str]) -> Optional[str]:
+            if not p:
+                return p
+            if to_relative:
+                # Convert absolute to relative
+                if os.path.isabs(p):
+                    try:
+                        rel = os.path.relpath(p, base_path)
+                        # Only use relative if it doesn't go too far up
+                        if not rel.startswith("..\\..\\.."):
+                            return rel.replace("\\", "/")
+                    except ValueError:
+                        pass  # Different drives on Windows
+                return p
+            else:
+                # Convert relative to absolute
+                if not os.path.isabs(p):
+                    return os.path.normpath(os.path.join(base_path, p))
+                return p
+
+        # Convert top-level path fields
+        for field in path_fields:
+            if field in data and data[field]:
+                data[field] = convert_path(data[field])
+
+        # Convert paths in sections
+        for section in data.get("sections", []):
+            for field in path_fields:
+                if field in section and section[field]:
+                    section[field] = convert_path(section[field])
+            # Convert paths in slides
+            for slide in section.get("slides", []):
+                for field in path_fields:
+                    if field in slide and slide[field]:
+                        slide[field] = convert_path(slide[field])
+
+        # Convert paths in v1 elements
+        for element in data.get("elements", []):
+            for field in path_fields:
+                if field in element and element[field]:
+                    element[field] = convert_path(element[field])

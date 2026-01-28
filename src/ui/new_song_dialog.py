@@ -130,12 +130,22 @@ class NewSongDialog(QDialog):
         self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
 
     def _split_lyrics(self, lyrics: str) -> list:
-        """Split lyrics into slides by blank lines."""
+        """Split lyrics into slides by blank lines.
+
+        A blank line is defined as a line containing only whitespace.
+        Single newlines are preserved within verses.
+        Double newlines (or more) indicate a new verse/chorus.
+        """
         # Normalize line endings
         lyrics = lyrics.replace('\r\n', '\n').replace('\r', '\n')
 
-        # Split by one or more blank lines
-        parts = re.split(r'\n\s*\n', lyrics)
+        # Remove trailing whitespace from each line
+        lines = [line.rstrip() for line in lyrics.split('\n')]
+        lyrics = '\n'.join(lines)
+
+        # Split by one or more blank lines (empty lines or lines with only whitespace)
+        # Pattern: newline followed by one or more empty lines
+        parts = re.split(r'\n(?:[ \t]*\n)+', lyrics)
 
         # Filter out empty parts and strip whitespace
         slides = [part.strip() for part in parts if part.strip()]

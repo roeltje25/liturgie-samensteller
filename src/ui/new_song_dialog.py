@@ -136,7 +136,13 @@ class NewSongDialog(QDialog):
         Single newlines are preserved within verses.
         Double newlines (or more) indicate a new verse/chorus.
         """
-        # Normalize line endings
+        # Normalize various line ending characters (including Unicode)
+        # \u2028 = Line Separator, \u2029 = Paragraph Separator
+        # \v = Vertical Tab, \f = Form Feed
+        lyrics = lyrics.replace('\u2029', '\n\n')  # Paragraph separator -> blank line
+        lyrics = lyrics.replace('\u2028', '\n')    # Line separator -> newline
+        lyrics = lyrics.replace('\v', '\n')        # Vertical tab -> newline
+        lyrics = lyrics.replace('\f', '\n\n')      # Form feed -> blank line
         lyrics = lyrics.replace('\r\n', '\n').replace('\r', '\n')
 
         # Remove trailing whitespace from each line

@@ -344,15 +344,49 @@ class LiturgyTreeWidget(QTreeWidget):
         item_type = item.data(0, Qt.ItemDataRole.UserRole)
 
         if item_type == self.ITEM_TYPE_SECTION:
+            section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            section = self._liturgy.get_section_by_id(section_id) if self._liturgy else None
+
+            # Add "Open PowerPoint" if section has a pptx file
+            if section and section.pptx_path and os.path.exists(section.pptx_path):
+                menu.addAction(tr("context.open_pptx"), lambda: self._open_pptx_file(section.pptx_path))
+                menu.addSeparator()
+
             menu.addAction(tr("context.duplicate"), self._duplicate_selected_section)
             menu.addAction(tr("menu.edit.delete"), self._delete_selected_section)
             menu.addSeparator()
             menu.addAction(tr("menu.edit.move_up"), self._move_section_up)
             menu.addAction(tr("menu.edit.move_down"), self._move_section_down)
         elif item_type == self.ITEM_TYPE_SLIDE:
+            section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            slide_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
+            slide = self._get_slide_by_ids(section_id, slide_id)
+
+            # Add "Open PowerPoint" if slide has a source path
+            if slide and slide.source_path and os.path.exists(slide.source_path):
+                menu.addAction(tr("context.open_pptx"), lambda: self._open_pptx_file(slide.source_path))
+                menu.addSeparator()
+
             menu.addAction(tr("button.edit"), self._edit_selected_slide)
 
         menu.exec(self.viewport().mapToGlobal(position))
+
+    def _get_slide_by_ids(self, section_id: str, slide_id: str) -> Optional[LiturgySlide]:
+        """Get a slide by section and slide IDs."""
+        if not self._liturgy:
+            return None
+        section = self._liturgy.get_section_by_id(section_id)
+        if not section:
+            return None
+        for slide in section.slides:
+            if slide.id == slide_id:
+                return slide
+        return None
+
+    def _open_pptx_file(self, path: str) -> None:
+        """Open a PowerPoint file with the default application."""
+        if os.path.exists(path):
+            os.startfile(path)
 
     def dropEvent(self, event: QDropEvent) -> None:
         """Handle drop event with constraints."""

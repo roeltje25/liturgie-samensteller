@@ -215,6 +215,7 @@
   "context.edit_fields": "Edit Fields...",
   "context.edit_youtube": "Edit YouTube Link...",
   "context.duplicate": "Duplicate",
+  "context.open_pptx": "Open PowerPoint",
 
   "dialog.section.title": "Add section",
   "dialog.section.enter_name": "Enter section name:",

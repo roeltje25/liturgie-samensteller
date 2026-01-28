@@ -577,7 +577,7 @@ class Liturgy:
                 name=item.title,
                 section_type=SectionType.SONG,
                 pdf_path=item.pdf_path,
-                youtube_links=item.youtube_links,
+                youtube_links=list(item.youtube_links) if item.youtube_links else [],
                 song_source_path=item.source_path,
             )
 

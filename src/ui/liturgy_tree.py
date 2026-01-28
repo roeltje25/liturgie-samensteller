@@ -175,15 +175,24 @@ class LiturgyTreeWidget(QTreeWidget):
         """Create a tree item for a section."""
         item = QTreeWidgetItem()
 
+        # Check if section contains only songs (all slides have song metadata)
+        is_song_section = section.is_song
+        if not is_song_section and section.slides:
+            # Check if all slides have song metadata (youtube_links or pdf_path)
+            is_song_section = all(
+                slide.youtube_links or slide.pdf_path
+                for slide in section.slides
+            )
+
         # Format display text
-        icon = "🎵" if section.is_song else "📁"
+        icon = "🎵" if is_song_section else "📁"
         indicators = []
-        if section.is_song:
+        if is_song_section:
             if section.has_pptx:
                 indicators.append("📊")  # PPT icon
-            if section.has_youtube:
+            if section.has_youtube or any(slide.youtube_links for slide in section.slides):
                 indicators.append("📺")  # YouTube icon
-            if section.has_pdf:
+            if section.has_pdf or any(slide.pdf_path for slide in section.slides):
                 indicators.append("📕")  # PDF icon
 
         indicator_text = " ".join(indicators)

@@ -45,10 +45,13 @@ class LiturgySlide:
     source_path: Optional[str] = None
     fields: Dict[str, str] = field(default_factory=dict)
     is_stub: bool = False
+    # Song metadata (carried with slide when moved between sections)
+    pdf_path: Optional[str] = None
+    youtube_links: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        d = {
             "id": self.id,
             "title": self.title,
             "slide_index": self.slide_index,
@@ -56,6 +59,12 @@ class LiturgySlide:
             "fields": self.fields,
             "is_stub": self.is_stub,
         }
+        # Only include song metadata if present
+        if self.pdf_path:
+            d["pdf_path"] = self.pdf_path
+        if self.youtube_links:
+            d["youtube_links"] = self.youtube_links
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiturgySlide":
@@ -67,6 +76,8 @@ class LiturgySlide:
             source_path=data.get("source_path"),
             fields=data.get("fields", {}),
             is_stub=data.get("is_stub", False),
+            pdf_path=data.get("pdf_path"),
+            youtube_links=data.get("youtube_links", []),
         )
 
 
@@ -573,21 +584,25 @@ class Liturgy:
         """Convert a v1 item to a v2 section."""
         if isinstance(item, SongLiturgyItem):
             # Song becomes a song section
+            youtube_links_copy = list(item.youtube_links) if item.youtube_links else []
             section = LiturgySection(
                 name=item.title,
                 section_type=SectionType.SONG,
                 pdf_path=item.pdf_path,
-                youtube_links=list(item.youtube_links) if item.youtube_links else [],
+                youtube_links=youtube_links_copy,
                 song_source_path=item.source_path,
             )
 
             # Create slide entries for each slide in the song PPTX
             # For now, create a single slide entry representing all slides
+            # Store song metadata at slide level too so it follows when moved
             slide = LiturgySlide(
                 title=item.title,
                 slide_index=0,
                 source_path=item.pptx_path,
                 is_stub=item.is_stub,
+                pdf_path=item.pdf_path,
+                youtube_links=youtube_links_copy,
             )
             section.slides.append(slide)
 

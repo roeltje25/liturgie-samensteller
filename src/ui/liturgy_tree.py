@@ -220,7 +220,19 @@ class LiturgyTreeWidget(QTreeWidget):
         # Format display text with tree-like prefix
         prefix = "└─" if index == total - 1 else "├─"
         clean_title = self._clean_title(slide.title) or f'Slide {index + 1}'
+
+        # Add indicators for slide-level properties
+        indicators = []
+        if slide.source_path and os.path.exists(slide.source_path):
+            indicators.append("📊")  # PPT icon
+        if slide.youtube_links:
+            indicators.append("📺")  # YouTube icon
+        if slide.pdf_path:
+            indicators.append("📕")  # PDF icon
+
         display_text = f"{prefix} {clean_title}"
+        if indicators:
+            display_text += f"  {' '.join(indicators)}"
         if slide.is_stub:
             display_text += " (stub)"
 

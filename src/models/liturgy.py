@@ -493,6 +493,43 @@ class Liturgy:
         # Insert into target section
         to_section.slides.insert(to_slide_idx, slide)
 
+        # Update section metadata based on slides
+        self._update_section_song_status(to_section)
+        self._update_section_song_status(from_section)
+
+    def _update_section_song_status(self, section: LiturgySection) -> None:
+        """Update section's song status based on its slides.
+
+        If all slides have song metadata, the section becomes a song section.
+        Also aggregates youtube_links and pdf_path from slides.
+        """
+        if not section.slides:
+            return
+
+        # Check if all slides have song metadata
+        all_songs = all(
+            slide.youtube_links or slide.pdf_path or
+            (slide.source_path and not slide.is_stub)
+            for slide in section.slides
+        )
+
+        if all_songs:
+            section.section_type = SectionType.SONG
+            # Aggregate metadata from slides
+            all_youtube = []
+            for slide in section.slides:
+                for link in slide.youtube_links:
+                    if link not in all_youtube:
+                        all_youtube.append(link)
+            section.youtube_links = all_youtube
+
+            # Use first slide's pdf_path if section doesn't have one
+            if not section.pdf_path:
+                for slide in section.slides:
+                    if slide.pdf_path:
+                        section.pdf_path = slide.pdf_path
+                        break
+
     def get_section_by_id(self, section_id: str) -> Optional[LiturgySection]:
         """Find a section by its ID."""
         for section in self.sections:

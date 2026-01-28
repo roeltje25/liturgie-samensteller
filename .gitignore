@@ -1,0 +1,51 @@
+# Build artifacts
+build/
+dist/
+installer_output/
+*.spec.bak
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# User-specific files
+settings.json
+*.liturgy
+
+# Temporary files
+nul
+*.tmp
+*.temp
+*.log
+
+# Claude Code
+.claude/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test/sample data folders (uncomment if needed)
+# VieringenBuilder/
+# Liederen/
+# Algemeen/
+# Vieringen/
+# Themas/

@@ -1,0 +1,12 @@
+# Development and build dependencies
+# Install with: pip install -r requirements-dev.txt
+
+# Include runtime dependencies
+-r requirements.txt
+
+# Build tools
+pyinstaller>=6.0.0
+pywin32>=306
+
+# Optional: for creating installer
+# pynsist>=2.8  # Creates Windows installers

@@ -347,10 +347,17 @@ class LiturgyTreeWidget(QTreeWidget):
             section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
             section = self._liturgy.get_section_by_id(section_id) if self._liturgy else None
 
-            # Add "Open PowerPoint" if section has a pptx file
-            if section and section.pptx_path and os.path.exists(section.pptx_path):
-                menu.addAction(tr("context.open_pptx"), lambda: self._open_pptx_file(section.pptx_path))
-                menu.addSeparator()
+            # Add "Open PowerPoint" if section has slides with a source path
+            if section and section.has_pptx:
+                # Get the pptx path from the first slide that has one
+                pptx_path = None
+                for slide in section.slides:
+                    if slide.source_path and os.path.exists(slide.source_path):
+                        pptx_path = slide.source_path
+                        break
+                if pptx_path:
+                    menu.addAction(tr("context.open_pptx"), lambda p=pptx_path: self._open_pptx_file(p))
+                    menu.addSeparator()
 
             menu.addAction(tr("context.duplicate"), self._duplicate_selected_section)
             menu.addAction(tr("menu.edit.delete"), self._delete_selected_section)

@@ -245,11 +245,16 @@ class NewSongDialog(QDialog):
             lyrics_frame = lyrics_box.text_frame
             lyrics_frame.word_wrap = True
 
-            # Add lyrics text
-            lyrics_para = lyrics_frame.paragraphs[0]
-            lyrics_para.text = slide_text
-            lyrics_para.font.size = Pt(32)
-            lyrics_para.alignment = PP_ALIGN.CENTER
+            # Add lyrics text - each line as a separate paragraph
+            lines = slide_text.split('\n')
+            for i, line in enumerate(lines):
+                if i == 0:
+                    lyrics_para = lyrics_frame.paragraphs[0]
+                else:
+                    lyrics_para = lyrics_frame.add_paragraph()
+                lyrics_para.text = line
+                lyrics_para.font.size = Pt(32)
+                lyrics_para.alignment = PP_ALIGN.CENTER
 
         prs.save(output_path)
 

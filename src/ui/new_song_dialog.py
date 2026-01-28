@@ -210,7 +210,6 @@ class NewSongDialog(QDialog):
         from pptx import Presentation
         from pptx.util import Inches, Pt
         from pptx.enum.text import PP_ALIGN
-        from pptx.dml.color import RgbColor
 
         # Create presentation
         prs = Presentation()

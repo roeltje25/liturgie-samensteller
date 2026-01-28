@@ -70,6 +70,7 @@ class NewSongDialog(QDialog):
         lyrics_layout.addWidget(self.lyrics_label)
 
         self.lyrics_input = QTextEdit()
+        self.lyrics_input.setAcceptRichText(False)  # Plain text only - strips HTML on paste
         self.lyrics_input.setPlaceholderText(tr("dialog.newsong.lyrics_placeholder"))
         lyrics_layout.addWidget(self.lyrics_input)
 

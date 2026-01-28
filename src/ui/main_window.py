@@ -491,7 +491,7 @@ class MainWindow(QMainWindow):
                 self.unsaved_changes = True
 
                 # Refresh folder scanner cache
-                self.folder_scanner.clear_cache()
+                self.folder_scanner.refresh()
 
     def _on_add_generic(self) -> None:
         """Add a generic item to the liturgy."""

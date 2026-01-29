@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent, QKeySequence, QDropEvent
+from PyQt6.QtGui import QKeyEvent, QKeySequence, QDropEvent, QDragEnterEvent, QDragMoveEvent
 
 import os
 
@@ -603,6 +603,20 @@ class LiturgyTreeWidget(QTreeWidget):
         """Open a PowerPoint file with the default application."""
         if os.path.exists(path):
             os.startfile(path)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Accept drag enter events for internal moves."""
+        if event.source() == self:
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        """Accept drag move events for internal moves."""
+        if event.source() == self:
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
 
     def dropEvent(self, event: QDropEvent) -> None:
         """Handle drop event with constraints."""

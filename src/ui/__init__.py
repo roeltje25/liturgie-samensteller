@@ -12,6 +12,7 @@ from .youtube_dialog import YouTubeDialog
 from .theme_picker import ThemeSectionPicker
 from .field_editor import SlideFieldEditor, BulkFieldEditor
 from .section_editor import SectionEditorDialog
+from .about_dialog import AboutDialog
 
 __all__ = [
     "MainWindow",
@@ -31,4 +32,5 @@ __all__ = [
     "SlideFieldEditor",
     "BulkFieldEditor",
     "SectionEditorDialog",
+    "AboutDialog",
 ]

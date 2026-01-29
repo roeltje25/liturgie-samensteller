@@ -6,11 +6,16 @@ import os
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
+from .logging_config import log_startup_info
 from .ui import MainWindow
+from . import __version__
 
 
 def main():
     """Run the application."""
+    # Log startup banner and info
+    log_startup_info()
+
     # Determine base path (where the app is run from)
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
@@ -24,7 +29,7 @@ def main():
 
     # Set application metadata
     app.setApplicationName("Liturgie Samensteller")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("PowerPoint Mixer")
 
     # Create and show main window

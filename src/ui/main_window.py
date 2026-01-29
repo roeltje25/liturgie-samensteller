@@ -54,12 +54,11 @@ from .youtube_dialog import YouTubeDialog
 from .field_editor import SlideFieldEditor, BulkFieldEditor
 from .theme_picker import ThemeSectionPicker
 from .section_editor import SectionEditorDialog
+from .about_dialog import AboutDialog
 
 
 class MainWindow(QMainWindow):
     """Main application window."""
-
-    VERSION = "1.0.0"
 
     def __init__(self, base_path: str = "."):
         super().__init__()
@@ -1093,11 +1092,8 @@ class MainWindow(QMainWindow):
 
     def _on_about(self) -> None:
         """Show about dialog."""
-        QMessageBox.about(
-            self,
-            tr("dialog.about.title"),
-            f"{tr('dialog.about.description')}\n\n{tr('dialog.about.version', version=self.VERSION)}"
-        )
+        dialog = AboutDialog(self)
+        dialog.exec()
 
     def _prompt_youtube_search(self, item: SongLiturgyItem) -> None:
         """Prompt user to search for YouTube video."""

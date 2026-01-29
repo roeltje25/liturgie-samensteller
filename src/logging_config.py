@@ -1,7 +1,9 @@
 """Logging configuration for Liturgy Builder."""
 
+import getpass
 import logging
 import os
+import platform
 import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
@@ -58,3 +60,58 @@ def get_logger(name: str = None) -> logging.Logger:
     if name:
         return logging.getLogger(f"liturgy_builder.{name}")
     return logger
+
+
+def log_startup_info() -> None:
+    """Log startup banner with version and user information."""
+    from . import __version__, __revision__, __build_date__
+
+    # ASCII banner
+    banner = r"""
+    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                                                                   ║
+    ║   ██╗     ██╗████████╗██╗   ██╗██████╗  ██████╗ ██╗███████╗       ║
+    ║   ██║     ██║╚══██╔══╝██║   ██║██╔══██╗██╔════╝ ██║██╔════╝       ║
+    ║   ██║     ██║   ██║   ██║   ██║██████╔╝██║  ███╗██║█████╗         ║
+    ║   ██║     ██║   ██║   ██║   ██║██╔══██╗██║   ██║██║██╔══╝         ║
+    ║   ███████╗██║   ██║   ╚██████╔╝██║  ██║╚██████╔╝██║███████╗       ║
+    ║   ╚══════╝╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝╚══════╝       ║
+    ║                                                                   ║
+    ║              ███████╗ █████╗ ███╗   ███╗███████╗███╗   ██╗        ║
+    ║              ██╔════╝██╔══██╗████╗ ████║██╔════╝████╗  ██║        ║
+    ║              ███████╗███████║██╔████╔██║█████╗  ██╔██╗ ██║        ║
+    ║              ╚════██║██╔══██║██║╚██╔╝██║██╔══╝  ██║╚██╗██║        ║
+    ║              ███████║██║  ██║██║ ╚═╝ ██║███████╗██║ ╚████║        ║
+    ║              ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝        ║
+    ║                                                                   ║
+    ║                    Liturgie Samensteller                          ║
+    ║                     PowerPoint Mixer                              ║
+    ║                                                                   ║
+    ╚═══════════════════════════════════════════════════════════════════╝
+    """
+
+    # Get user info
+    try:
+        username = getpass.getuser()
+    except Exception:
+        username = "unknown"
+
+    # Get system info
+    try:
+        hostname = platform.node()
+    except Exception:
+        hostname = "unknown"
+
+    # Log the banner
+    for line in banner.strip().split('\n'):
+        logger.info(line)
+
+    # Log version and system info
+    logger.info("=" * 71)
+    logger.info(f"  Version: {__version__} (revision: {__revision__})")
+    logger.info(f"  Build date: {__build_date__}")
+    logger.info(f"  User: {username}@{hostname}")
+    logger.info(f"  Python: {platform.python_version()}")
+    logger.info(f"  Platform: {platform.system()} {platform.release()}")
+    logger.info(f"  Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 71)

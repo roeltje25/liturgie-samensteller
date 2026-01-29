@@ -3,37 +3,47 @@
 import sys
 import os
 
+# Minimal imports first - these are fast
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
-
-from .logging_config import log_startup_info
-from .ui import MainWindow
-from . import __version__
 
 
 def main():
     """Run the application."""
-    # Log startup banner and info
-    log_startup_info()
-
-    # Determine base path (where the app is run from)
+    # Determine base path early (no heavy imports needed)
     if getattr(sys, 'frozen', False):
-        # Running as compiled executable
         base_path = os.path.dirname(sys.executable)
     else:
-        # Running as script
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    # Create application
+    # Create application first (required for any Qt widgets)
     app = QApplication(sys.argv)
+
+    # Show splash screen immediately (before heavy imports)
+    from .ui.splash_screen import show_splash
+    splash = show_splash(app)
+
+    # Now do the heavy imports while splash is visible
+    from .logging_config import log_startup_info
+    from .ui import MainWindow
+    from . import __version__
+
+    # Log startup banner and info
+    log_startup_info()
 
     # Set application metadata
     app.setApplicationName("Liturgie Samensteller")
     app.setApplicationVersion(__version__)
     app.setOrganizationName("PowerPoint Mixer")
 
-    # Create and show main window
+    # Create main window (this can take time due to services initialization)
+    splash.showMessage("Initializing...", Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
+    app.processEvents()
+
     window = MainWindow(base_path)
+
+    # Close splash and show main window
+    splash.finish(window)
     window.show()
 
     # Run event loop

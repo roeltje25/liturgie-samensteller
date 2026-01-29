@@ -13,6 +13,7 @@ from .theme_picker import ThemeSectionPicker
 from .field_editor import SlideFieldEditor, BulkFieldEditor
 from .section_editor import SectionEditorDialog
 from .about_dialog import AboutDialog
+from .splash_screen import create_splash, show_splash
 
 __all__ = [
     "MainWindow",
@@ -33,4 +34,6 @@ __all__ = [
     "BulkFieldEditor",
     "SectionEditorDialog",
     "AboutDialog",
+    "create_splash",
+    "show_splash",
 ]

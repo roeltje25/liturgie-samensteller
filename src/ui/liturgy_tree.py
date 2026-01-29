@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent, QKeySequence, QShortcut
+from PyQt6.QtGui import QKeyEvent, QKeySequence, QDropEvent
 
 import os
 

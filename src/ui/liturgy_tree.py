@@ -7,9 +7,11 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem,
     QAbstractItemView,
     QMenu,
+    QLineEdit,
+    QStyledItemDelegate,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QMimeData
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QKeyEvent, QKeySequence, QShortcut
 
 import os
 
@@ -51,6 +53,11 @@ class LiturgyTreeWidget(QTreeWidget):
         self._pptx_service = pptx_service
         # Cache for unfilled fields check: {(source_path, slide_index): [field_names]}
         self._field_cache: dict = {}
+        # Clipboard for copy/paste
+        self._clipboard_section: Optional[LiturgySection] = None
+        self._clipboard_slide: Optional[Tuple[LiturgySlide, str]] = None  # (slide, source_section_id)
+        # Inline editor
+        self._edit_widget: Optional[QLineEdit] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -357,6 +364,183 @@ class LiturgyTreeWidget(QTreeWidget):
     def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
         """Handle double-click on item."""
         self.item_double_clicked.emit()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Handle key press events for F2 (rename), Ctrl+C (copy), Ctrl+V (paste)."""
+        if event.key() == Qt.Key.Key_F2:
+            self._start_inline_edit()
+            return
+        elif event.matches(QKeySequence.StandardKey.Copy):
+            self._copy_selected()
+            return
+        elif event.matches(QKeySequence.StandardKey.Paste):
+            self._paste()
+            return
+
+        super().keyPressEvent(event)
+
+    def _start_inline_edit(self) -> None:
+        """Start inline editing of the selected item's title."""
+        selected = self.selectedItems()
+        if not selected:
+            return
+
+        item = selected[0]
+        item_type = item.data(0, Qt.ItemDataRole.UserRole)
+
+        # Get the current title
+        if item_type == self.ITEM_TYPE_SECTION:
+            section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            section = self._liturgy.get_section_by_id(section_id) if self._liturgy else None
+            if not section:
+                return
+            current_title = section.name
+        elif item_type == self.ITEM_TYPE_SLIDE:
+            section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            slide_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
+            slide = self._get_slide_by_ids(section_id, slide_id)
+            if not slide:
+                return
+            current_title = slide.title
+        else:
+            return
+
+        # Create inline editor
+        rect = self.visualItemRect(item)
+        self._edit_widget = QLineEdit(self)
+        self._edit_widget.setText(current_title)
+        self._edit_widget.setGeometry(rect)
+        self._edit_widget.selectAll()
+        self._edit_widget.setFocus()
+        self._edit_widget.show()
+
+        # Store item info for when editing finishes
+        self._edit_widget.setProperty("item_type", item_type)
+        self._edit_widget.setProperty("section_id", section_id if item_type == self.ITEM_TYPE_SECTION else section_id)
+        self._edit_widget.setProperty("slide_id", slide_id if item_type == self.ITEM_TYPE_SLIDE else None)
+
+        # Connect signals
+        self._edit_widget.editingFinished.connect(self._finish_inline_edit)
+        self._edit_widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:
+        """Filter events for the inline editor."""
+        if obj == self._edit_widget and event.type() == event.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape:
+                self._cancel_inline_edit()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _finish_inline_edit(self) -> None:
+        """Finish inline editing and apply the new title."""
+        if not self._edit_widget:
+            return
+
+        new_title = self._edit_widget.text().strip()
+        item_type = self._edit_widget.property("item_type")
+        section_id = self._edit_widget.property("section_id")
+        slide_id = self._edit_widget.property("slide_id")
+
+        self._edit_widget.deleteLater()
+        self._edit_widget = None
+
+        if not new_title:
+            self._update_display()
+            return
+
+        if item_type == self.ITEM_TYPE_SECTION:
+            section = self._liturgy.get_section_by_id(section_id) if self._liturgy else None
+            if section and section.name != new_title:
+                section.name = new_title
+                self._update_display()
+                self.order_changed.emit()
+        elif item_type == self.ITEM_TYPE_SLIDE:
+            slide = self._get_slide_by_ids(section_id, slide_id)
+            if slide and slide.title != new_title:
+                slide.title = new_title
+                self._update_display()
+                self.order_changed.emit()
+
+    def _cancel_inline_edit(self) -> None:
+        """Cancel inline editing."""
+        if self._edit_widget:
+            self._edit_widget.deleteLater()
+            self._edit_widget = None
+
+    def _copy_selected(self) -> None:
+        """Copy the selected section or slide to clipboard."""
+        selected = self.selectedItems()
+        if not selected or not self._liturgy:
+            return
+
+        item = selected[0]
+        item_type = item.data(0, Qt.ItemDataRole.UserRole)
+
+        if item_type == self.ITEM_TYPE_SECTION:
+            section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            section = self._liturgy.get_section_by_id(section_id)
+            if section:
+                self._clipboard_section = section.copy()
+                self._clipboard_slide = None
+                logger.debug(f"Copied section: {section.name}")
+        elif item_type == self.ITEM_TYPE_SLIDE:
+            section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            slide_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
+            slide = self._get_slide_by_ids(section_id, slide_id)
+            if slide:
+                self._clipboard_slide = (slide.copy(), section_id)
+                self._clipboard_section = None
+                logger.debug(f"Copied slide: {slide.title}")
+
+    def _paste(self) -> None:
+        """Paste the copied section or slide."""
+        if not self._liturgy:
+            return
+
+        selected = self.selectedItems()
+        target_section_idx = -1
+        target_slide_idx = -1
+
+        if selected:
+            item = selected[0]
+            item_type = item.data(0, Qt.ItemDataRole.UserRole)
+
+            if item_type == self.ITEM_TYPE_SECTION:
+                target_section_idx = self.indexOfTopLevelItem(item)
+            elif item_type == self.ITEM_TYPE_SLIDE:
+                parent = item.parent()
+                if parent:
+                    target_section_idx = self.indexOfTopLevelItem(parent)
+                    target_slide_idx = parent.indexOfChild(item)
+
+        if self._clipboard_section:
+            # Paste section after the selected section (or at end)
+            new_section = self._clipboard_section.copy()
+            new_section.name = f"{new_section.name} (kopie)"
+
+            if target_section_idx >= 0:
+                self._liturgy.insert_section(target_section_idx + 1, new_section)
+            else:
+                self._liturgy.add_section(new_section)
+
+            self._update_display()
+            self.order_changed.emit()
+            logger.debug(f"Pasted section: {new_section.name}")
+
+        elif self._clipboard_slide:
+            slide, _ = self._clipboard_slide
+            new_slide = slide.copy()
+
+            if target_section_idx >= 0 and target_section_idx < len(self._liturgy.sections):
+                target_section = self._liturgy.sections[target_section_idx]
+                if target_slide_idx >= 0:
+                    target_section.slides.insert(target_slide_idx + 1, new_slide)
+                else:
+                    target_section.slides.append(new_slide)
+
+                self._update_display()
+                self.order_changed.emit()
+                logger.debug(f"Pasted slide: {new_slide.title}")
 
     def _on_context_menu(self, position) -> None:
         """Show context menu."""

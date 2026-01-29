@@ -84,6 +84,16 @@ class LiturgySlide:
             youtube_links=data.get("youtube_links", []),
         )
 
+    def copy(self) -> "LiturgySlide":
+        """Create a deep copy of this slide with a new ID."""
+        data = self.to_dict()
+        data["id"] = generate_uuid()
+        # Deep copy fields dict
+        data["fields"] = dict(data.get("fields", {}))
+        # Deep copy youtube_links list
+        data["youtube_links"] = list(data.get("youtube_links", []))
+        return LiturgySlide.from_dict(data)
+
 
 @dataclass
 class LiturgySection:

@@ -211,6 +211,8 @@
   "dialog.editor.current_links": "Huidige YouTube links:",
   "dialog.editor.remove_link": "Geselecteerde verwijderen",
   "dialog.editor.add_selected": "Geselecteerde toevoegen",
+  "dialog.editor.section_name": "Sectienaam:",
+  "dialog.editor.slide_title": "Diatitel:",
 
   "context.edit_fields": "Velden bewerken...",
   "context.edit_youtube": "YouTube link bewerken...",

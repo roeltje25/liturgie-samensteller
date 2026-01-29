@@ -211,6 +211,8 @@
   "dialog.editor.current_links": "Current YouTube links:",
   "dialog.editor.remove_link": "Remove selected",
   "dialog.editor.add_selected": "Add selected",
+  "dialog.editor.section_name": "Section name:",
+  "dialog.editor.slide_title": "Slide title:",
 
   "context.edit_fields": "Edit Fields...",
   "context.edit_youtube": "Edit YouTube Link...",

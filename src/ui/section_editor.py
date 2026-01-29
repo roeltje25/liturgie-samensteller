@@ -268,14 +268,24 @@ class SectionEditorDialog(QDialog):
         """Setup the fields editing tab."""
         layout = QVBoxLayout(self.fields_tab)
 
-        # Info label (no stretch)
+        # Section name edit
+        section_layout = QHBoxLayout()
+        section_layout.addWidget(QLabel(tr("dialog.editor.section_name")))
+        self.section_name_edit = QLineEdit()
+        self.section_name_edit.setText(self.section.name or "")
+        section_layout.addWidget(self.section_name_edit)
+        layout.addLayout(section_layout, 0)
+
+        # Slide title edit (if we have a slide)
         if self.slide:
-            info_text = f"{self.section.name} - {self.slide.title}"
+            slide_layout = QHBoxLayout()
+            slide_layout.addWidget(QLabel(tr("dialog.editor.slide_title")))
+            self.slide_title_edit = QLineEdit()
+            self.slide_title_edit.setText(self.slide.title or "")
+            slide_layout.addWidget(self.slide_title_edit)
+            layout.addLayout(slide_layout, 0)
         else:
-            info_text = self.section.name or ""
-        self.fields_info_label = QLabel(info_text)
-        self.fields_info_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(self.fields_info_label, 0)
+            self.slide_title_edit = None
 
         # Fields table (stretches)
         self.fields_table = QTableWidget()
@@ -703,6 +713,17 @@ class SectionEditorDialog(QDialog):
         """Save all changes and close."""
         # Stop any playback
         self._stop_playback()
+
+        # Save section name
+        new_section_name = self.section_name_edit.text().strip()
+        if new_section_name:
+            self.section.name = new_section_name
+
+        # Save slide title
+        if self.slide and self.slide_title_edit:
+            new_slide_title = self.slide_title_edit.text().strip()
+            if new_slide_title:
+                self.slide.title = new_slide_title
 
         # Save fields
         if self.slide:

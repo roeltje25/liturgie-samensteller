@@ -12,6 +12,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.formula.translate import Translator
 
 from ..models import Liturgy, SectionType
+from ..logging_config import get_logger
+
+logger = get_logger("excel_service")
 
 
 def _get_current_year() -> int:
@@ -184,13 +187,16 @@ class ExcelService:
             List of unique dienstleider names, sorted alphabetically.
         """
         if not os.path.exists(self.excel_path):
+            logger.debug(f"Excel file not found for dienstleiders: {self.excel_path}")
             return []
 
+        wb = None
         try:
+            logger.debug(f"Loading Excel file for dienstleiders: {self.excel_path}")
             wb = load_workbook(self.excel_path, read_only=True, data_only=True)
 
             if self.LITURGY_SHEET not in wb.sheetnames:
-                wb.close()
+                logger.warning(f"Sheet '{self.LITURGY_SHEET}' not found in Excel file")
                 return []
 
             ws = wb[self.LITURGY_SHEET]
@@ -198,7 +204,7 @@ class ExcelService:
             dienstleider_col = col_map.get(self.COL_DIENSTLEIDER)
 
             if not dienstleider_col:
-                wb.close()
+                logger.warning(f"Dienstleider column not found in sheet")
                 return []
 
             dienstleiders = set()
@@ -207,11 +213,18 @@ class ExcelService:
                 if value and isinstance(value, str) and value.strip():
                     dienstleiders.add(value.strip())
 
-            wb.close()
+            logger.debug(f"Found {len(dienstleiders)} unique dienstleiders")
             return sorted(dienstleiders)
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error reading dienstleiders from Excel: {e}", exc_info=True)
             return []
+        finally:
+            if wb:
+                try:
+                    wb.close()
+                except Exception as e:
+                    logger.debug(f"Error closing workbook: {e}")
 
     def _find_sheet_name(self, wb, target_name: str) -> Optional[str]:
         """Find sheet name case-insensitively."""

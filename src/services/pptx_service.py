@@ -13,6 +13,10 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 
+from ..logging_config import get_logger
+
+logger = get_logger("pptx_service")
+
 from ..models import (
     Settings,
     Liturgy,
@@ -71,12 +75,20 @@ class PptxService:
 
         if not slides_to_copy:
             # No slides to copy, create empty presentation
-            prs = Presentation()
-            prs.slide_width = Inches(13.333)
-            prs.slide_height = Inches(7.5)
-            temp_path = tempfile.mktemp(suffix='.pptx')
-            prs.save(temp_path)
-            return temp_path
+            logger.info("merge_liturgy: No slides to copy, creating empty presentation")
+            try:
+                prs = Presentation()
+                prs.slide_width = Inches(13.333)
+                prs.slide_height = Inches(7.5)
+                temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+                temp_path = temp_file.name
+                temp_file.close()
+                prs.save(temp_path)
+                logger.debug(f"Empty presentation saved to: {temp_path}")
+                return temp_path
+            except Exception as e:
+                logger.error(f"Failed to create empty presentation: {e}", exc_info=True)
+                raise
 
         # Try VBScript method (Windows with PowerPoint installed)
         if os.name == 'nt':
@@ -136,29 +148,37 @@ class PptxService:
             return temp_path
         else:
             # Create simple stub
-            prs = Presentation()
-            prs.slide_width = Inches(13.333)
-            prs.slide_height = Inches(7.5)
+            logger.info(f"Creating simple stub presentation for: {title}")
+            try:
+                prs = Presentation()
+                prs.slide_width = Inches(13.333)
+                prs.slide_height = Inches(7.5)
 
-            blank_layout = prs.slide_layouts[6]
-            slide = prs.slides.add_slide(blank_layout)
+                blank_layout = prs.slide_layouts[6]
+                slide = prs.slides.add_slide(blank_layout)
 
-            left = Inches(1)
-            top = Inches(3)
-            width = Inches(11.333)
-            height = Inches(1.5)
+                left = Inches(1)
+                top = Inches(3)
+                width = Inches(11.333)
+                height = Inches(1.5)
 
-            textbox = slide.shapes.add_textbox(left, top, width, height)
-            tf = textbox.text_frame
-            p = tf.paragraphs[0]
-            p.text = title
-            p.font.size = Pt(44)
-            p.font.bold = True
-            p.alignment = PP_ALIGN.CENTER
+                textbox = slide.shapes.add_textbox(left, top, width, height)
+                tf = textbox.text_frame
+                p = tf.paragraphs[0]
+                p.text = title
+                p.font.size = Pt(44)
+                p.font.bold = True
+                p.alignment = PP_ALIGN.CENTER
 
-            temp_path = tempfile.mktemp(suffix='.pptx')
-            prs.save(temp_path)
-            return temp_path
+                temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+                temp_path = temp_file.name
+                temp_file.close()
+                prs.save(temp_path)
+                logger.debug(f"Stub presentation saved to: {temp_path}")
+                return temp_path
+            except Exception as e:
+                logger.error(f"Failed to create stub presentation: {e}", exc_info=True)
+                raise
 
     def _merge_with_vbscript(self, slides_to_copy: List[Tuple[str, List[int]]]) -> str:
         """
@@ -549,9 +569,15 @@ class PptxService:
         Fallback merge using python-pptx.
         Uses the first source as base and copies slides from other sources.
         """
+        logger.info(f"Merging {len(slides_to_copy)} presentations using python-pptx")
         # Use first presentation as base - this preserves its theme/master
         first_path, first_indices = slides_to_copy[0]
-        prs = Presentation(first_path)
+        try:
+            prs = Presentation(first_path)
+            logger.debug(f"Loaded base presentation: {first_path}")
+        except Exception as e:
+            logger.error(f"Failed to load base presentation {first_path}: {e}", exc_info=True)
+            raise
 
         # Remove slides we don't want from the first presentation
         all_indices = set(range(len(prs.slides)))
@@ -566,15 +592,23 @@ class PptxService:
         # Add slides from other presentations
         for source_path, slide_indices in slides_to_copy[1:]:
             if not os.path.exists(source_path):
+                logger.warning(f"Source presentation not found, skipping: {source_path}")
                 continue
 
-            source_prs = Presentation(source_path)
+            try:
+                source_prs = Presentation(source_path)
+                logger.debug(f"Loading source presentation: {source_path}")
+                for slide_idx in slide_indices:
+                    self._copy_slide_from_source(prs, source_prs, slide_idx)
+            except Exception as e:
+                logger.error(f"Failed to load/copy from {source_path}: {e}", exc_info=True)
+                continue
 
-            for slide_idx in slide_indices:
-                self._copy_slide_from_source(prs, source_prs, slide_idx)
-
-        temp_path = tempfile.mktemp(suffix='.pptx')
+        temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
         prs.save(temp_path)
+        logger.info(f"Merged presentation saved to: {temp_path}")
         return temp_path
 
     def save_presentation(self, temp_path: str, output_path: str) -> None:
@@ -676,14 +710,18 @@ class PptxService:
             import win32com.client
             import pythoncom
         except ImportError:
+            logger.debug("win32com not available for slide thumbnail export")
             return None
 
         powerpoint = None
         presentation = None
+        com_initialized = False
 
         try:
             # Initialize COM in this thread
             pythoncom.CoInitialize()
+            com_initialized = True
+            logger.debug(f"Exporting slide {slide_index} from {pptx_path}")
 
             # Create PowerPoint application
             powerpoint = win32com.client.Dispatch("PowerPoint.Application")
@@ -699,6 +737,7 @@ class PptxService:
             # Get the slide (1-based index in COM)
             slide_number = slide_index + 1
             if slide_number > presentation.Slides.Count:
+                logger.warning(f"Slide index {slide_index} out of range (max {presentation.Slides.Count - 1})")
                 return None
 
             slide = presentation.Slides(slide_number)
@@ -714,24 +753,25 @@ class PptxService:
                 with open(output_path, 'rb') as f:
                     return f.read()
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to export slide thumbnail: {pptx_path}[{slide_index}]: {e}", exc_info=True)
         finally:
             # Clean up COM objects
             try:
                 if presentation:
                     presentation.Close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error closing presentation: {e}")
             try:
                 if powerpoint:
                     powerpoint.Quit()
-            except Exception:
-                pass
-            try:
-                pythoncom.CoUninitialize()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error quitting PowerPoint: {e}")
+            if com_initialized:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception as e:
+                    logger.debug(f"Error uninitializing COM: {e}")
 
         return None
 
@@ -835,7 +875,7 @@ class PptxService:
             return sections
 
         except Exception as e:
-            print(f"Error reading sections from {pptx_path}: {e}")
+            logger.error(f"Error reading sections from {pptx_path}: {e}", exc_info=True)
             return []
 
     def _clean_title(self, title: str) -> str:
@@ -1141,12 +1181,20 @@ class PptxService:
 
         if not slides_to_copy:
             # No slides to copy, create empty presentation
-            prs = Presentation()
-            prs.slide_width = Inches(13.333)
-            prs.slide_height = Inches(7.5)
-            temp_path = tempfile.mktemp(suffix='.pptx')
-            prs.save(temp_path)
-            return temp_path
+            logger.info("merge_liturgy_v2: No slides to copy, creating empty presentation")
+            try:
+                prs = Presentation()
+                prs.slide_width = Inches(13.333)
+                prs.slide_height = Inches(7.5)
+                temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+                temp_path = temp_file.name
+                temp_file.close()
+                prs.save(temp_path)
+                logger.debug(f"Empty presentation saved to: {temp_path}")
+                return temp_path
+            except Exception as e:
+                logger.error(f"Failed to create empty presentation: {e}", exc_info=True)
+                raise
 
         # Try VBScript method (Windows with PowerPoint installed)
         if os.name == 'nt':
@@ -1172,16 +1220,30 @@ class PptxService:
         slides_to_copy: List of (pptx_path, slide_indices, fields_by_index)
         """
         if not slides_to_copy:
-            prs = Presentation()
-            prs.slide_width = Inches(13.333)
-            prs.slide_height = Inches(7.5)
-            temp_path = tempfile.mktemp(suffix='.pptx')
-            prs.save(temp_path)
-            return temp_path
+            logger.info("_merge_with_pptx_v2: No slides to copy, creating empty presentation")
+            try:
+                prs = Presentation()
+                prs.slide_width = Inches(13.333)
+                prs.slide_height = Inches(7.5)
+                temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+                temp_path = temp_file.name
+                temp_file.close()
+                prs.save(temp_path)
+                logger.debug(f"Empty presentation saved to: {temp_path}")
+                return temp_path
+            except Exception as e:
+                logger.error(f"Failed to create empty presentation: {e}", exc_info=True)
+                raise
 
         # Use first presentation as base
         first_path, first_indices, first_fields = slides_to_copy[0]
-        prs = Presentation(first_path)
+        logger.info(f"Merging {len(slides_to_copy)} presentations using python-pptx v2")
+        try:
+            prs = Presentation(first_path)
+            logger.debug(f"Loaded base presentation: {first_path}")
+        except Exception as e:
+            logger.error(f"Failed to load base presentation {first_path}: {e}", exc_info=True)
+            raise
 
         # Remove slides we don't want from the first presentation
         all_indices = set(range(len(prs.slides)))
@@ -1201,15 +1263,22 @@ class PptxService:
         # Add slides from other presentations
         for source_path, slide_indices, fields_by_index in slides_to_copy[1:]:
             if not os.path.exists(source_path):
+                logger.warning(f"Source presentation not found, skipping: {source_path}")
                 continue
 
-            source_prs = Presentation(source_path)
+            try:
+                source_prs = Presentation(source_path)
+                logger.debug(f"Loading source presentation: {source_path}")
+                for slide_idx in slide_indices:
+                    new_slide = self._copy_slide_from_source(prs, source_prs, slide_idx)
+                    if new_slide and slide_idx in fields_by_index:
+                        self.fill_slide_fields(new_slide, fields_by_index[slide_idx])
+            except Exception as e:
+                logger.error(f"Failed to load/copy from {source_path}: {e}", exc_info=True)
+                continue
 
-            for slide_idx in slide_indices:
-                new_slide = self._copy_slide_from_source(prs, source_prs, slide_idx)
-                if new_slide and slide_idx in fields_by_index:
-                    self.fill_slide_fields(new_slide, fields_by_index[slide_idx])
-
-        temp_path = tempfile.mktemp(suffix='.pptx')
+        temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
         prs.save(temp_path)
         return temp_path

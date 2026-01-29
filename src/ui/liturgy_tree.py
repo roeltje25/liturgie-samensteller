@@ -27,6 +27,9 @@ from ..models import (
 )
 from ..services import PptxService
 from ..i18n import tr
+from ..logging_config import get_logger
+
+logger = get_logger("liturgy_tree")
 
 
 class LiturgyTreeWidget(QTreeWidget):
@@ -78,7 +81,8 @@ class LiturgyTreeWidget(QTreeWidget):
                 self._field_cache[cache_key] = [
                     f.name for f in fields if f.field_type == "text_pattern"
                 ]
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not extract fields from {slide.source_path}[{slide.slide_index}]: {e}")
                 self._field_cache[cache_key] = []
 
         required_fields = self._field_cache[cache_key]

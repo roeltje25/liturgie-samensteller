@@ -5,6 +5,10 @@ import os
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
+from ..logging_config import get_logger
+
+logger = get_logger("settings")
+
 
 @dataclass
 class Settings:
@@ -45,11 +49,24 @@ class Settings:
         """Load settings from JSON file."""
         if os.path.exists(path):
             try:
+                logger.debug(f"Loading settings from: {path}")
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                return cls(**data)
-            except (json.JSONDecodeError, TypeError):
-                pass
+                # Filter out unknown keys to handle version differences
+                valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
+                filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+                if len(filtered_data) != len(data):
+                    ignored = set(data.keys()) - valid_fields
+                    logger.debug(f"Ignored unknown settings keys: {ignored}")
+                return cls(**filtered_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in settings file {path}: {e}")
+            except TypeError as e:
+                logger.error(f"Invalid settings data in {path}: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error loading settings from {path}: {e}", exc_info=True)
+        else:
+            logger.debug(f"Settings file not found, using defaults: {path}")
         return cls()
 
     def save(self, path: str = "settings.json") -> None:

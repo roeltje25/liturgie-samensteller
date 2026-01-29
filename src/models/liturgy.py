@@ -8,6 +8,10 @@ from datetime import date
 from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 
+from ..logging_config import get_logger
+
+logger = get_logger("liturgy")
+
 
 class ItemType(Enum):
     """Types of liturgy items (v1 compatibility)."""
@@ -681,6 +685,7 @@ class Liturgy:
 
         If base_path is provided, paths are saved relative to it.
         """
+        logger.info(f"Saving liturgy to: {path}")
         data = self.to_dict()
 
         if base_path:
@@ -688,9 +693,15 @@ class Liturgy:
             data["_saved_base_path"] = base_path
             # Convert all paths to relative
             self._convert_paths_in_dict(data, base_path, to_relative=True)
+            logger.debug(f"Converted paths relative to: {base_path}")
 
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Liturgy saved successfully: {path}")
+        except Exception as e:
+            logger.error(f"Failed to save liturgy to {path}: {e}", exc_info=True)
+            raise
 
     @classmethod
     def load(cls, path: str, base_path: Optional[str] = None) -> "Liturgy":
@@ -698,11 +709,20 @@ class Liturgy:
 
         If base_path is provided, relative paths are resolved to absolute.
         """
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        logger.info(f"Loading liturgy from: {path}")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in liturgy file {path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to load liturgy from {path}: {e}", exc_info=True)
+            raise
 
         if base_path:
             cls._convert_paths_in_dict(data, base_path, to_relative=False)
+            logger.debug(f"Resolved paths relative to: {base_path}")
 
         return cls.from_dict(data)
 
@@ -749,8 +769,11 @@ class Liturgy:
                     try:
                         rel = os.path.relpath(p, base_path)
                         # Only use relative if it doesn't go too far up
-                        if not rel.startswith("..\\..\\.."):
-                            return rel.replace("\\", "/")
+                        # Use os.sep for platform independence
+                        too_many_parents = ".." + os.sep + ".." + os.sep + ".."
+                        if not rel.startswith(too_many_parents):
+                            # Normalize to forward slashes for cross-platform compatibility
+                            return rel.replace(os.sep, "/")
                     except ValueError:
                         pass  # Different drives on Windows
                 return p

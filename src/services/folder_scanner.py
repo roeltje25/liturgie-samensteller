@@ -7,6 +7,9 @@ from typing import List, Optional, Dict
 from pptx import Presentation
 
 from ..models import Song, GenericItem, OfferingSlide, Settings
+from ..logging_config import get_logger
+
+logger = get_logger("folder_scanner")
 
 
 class FolderScanner:
@@ -133,16 +136,19 @@ class FolderScanner:
                 return self._offerings_cache
 
         if not os.path.exists(pptx_path):
+            logger.debug(f"Offering file not found: {pptx_path}")
             return []
 
         slides = []
         try:
+            logger.debug(f"Loading offering slides from: {pptx_path}")
             prs = Presentation(pptx_path)
             for idx, slide in enumerate(prs.slides):
                 title = self._extract_slide_title(slide, idx)
                 slides.append(OfferingSlide(index=idx, title=title))
-        except Exception:
-            pass
+            logger.debug(f"Found {len(slides)} offering slides")
+        except Exception as e:
+            logger.error(f"Failed to load offering slides from {pptx_path}: {e}", exc_info=True)
 
         # Only cache default collecte slides
         if pptx_path == self.settings.get_collecte_path(self.base_path):
@@ -188,8 +194,8 @@ class FolderScanner:
                         title = match.group(1).strip()
                         if title and not title.rstrip(':').lower().strip() == 'collecte':
                             return title
-        except Exception:
-            pass  # Notes might not be accessible
+        except Exception as e:
+            logger.debug(f"Could not access slide notes: {e}")
 
         # Try to find title shape
         if slide.shapes.title:

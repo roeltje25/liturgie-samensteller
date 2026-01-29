@@ -2,12 +2,53 @@
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 from ..logging_config import get_logger
 
 logger = get_logger("settings")
+
+# Application name for config directory
+APP_NAME = "LiturgieSamensteller"
+
+
+def get_config_dir() -> str:
+    """Get the appropriate config directory for the current platform.
+
+    Windows: %APPDATA%/LiturgieSamensteller
+    macOS: ~/Library/Application Support/LiturgieSamensteller
+    Linux: ~/.config/LiturgieSamensteller
+    """
+    if sys.platform == "win32":
+        # Windows: use APPDATA
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif sys.platform == "darwin":
+        # macOS: use Application Support
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        # Linux/Unix: use XDG_CONFIG_HOME or ~/.config
+        base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+
+    config_dir = os.path.join(base, APP_NAME)
+
+    # Create directory if it doesn't exist
+    if not os.path.exists(config_dir):
+        try:
+            os.makedirs(config_dir, exist_ok=True)
+            logger.debug(f"Created config directory: {config_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create config directory {config_dir}: {e}")
+            # Fall back to current directory
+            return "."
+
+    return config_dir
+
+
+def get_settings_path() -> str:
+    """Get the full path to the settings file."""
+    return os.path.join(get_config_dir(), "settings.json")
 
 
 @dataclass
@@ -45,8 +86,15 @@ class Settings:
         return fallback_path
 
     @classmethod
-    def load(cls, path: str = "settings.json") -> "Settings":
-        """Load settings from JSON file."""
+    def load(cls, path: Optional[str] = None) -> "Settings":
+        """Load settings from JSON file.
+
+        Args:
+            path: Path to settings file. If None, uses default config location.
+        """
+        if path is None:
+            path = get_settings_path()
+
         if os.path.exists(path):
             try:
                 logger.debug(f"Loading settings from: {path}")
@@ -69,10 +117,23 @@ class Settings:
             logger.debug(f"Settings file not found, using defaults: {path}")
         return cls()
 
-    def save(self, path: str = "settings.json") -> None:
-        """Save settings to JSON file."""
+    def save(self, path: Optional[str] = None) -> None:
+        """Save settings to JSON file.
+
+        Args:
+            path: Path to settings file. If None, uses default config location.
+        """
+        if path is None:
+            path = get_settings_path()
+
+        # Ensure directory exists
+        dir_path = os.path.dirname(path)
+        if dir_path and not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
+
         with open(path, "w", encoding="utf-8") as f:
             json.dump(asdict(self), f, indent=2, ensure_ascii=False)
+        logger.debug(f"Settings saved to: {path}")
 
     def _resolve_base(self, fallback_path: str = ".") -> str:
         """Resolve the base path to use for relative paths."""

@@ -75,7 +75,7 @@ def _handle_first_run(base_path: str, settings) -> None:
 
     if folder:
         settings.base_folder = folder
-        settings.save(os.path.join(base_path, "settings.json"))
+        settings.save()  # Saves to AppData/LiturgieSamensteller/settings.json
 
 
 def main():
@@ -109,7 +109,7 @@ def main():
     splash.showMessage("Loading settings...", Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
     app.processEvents()
 
-    settings = Settings.load(os.path.join(base_path, "settings.json"))
+    settings = Settings.load()  # Loads from AppData/LiturgieSamensteller/settings.json
 
     # Handle first run BEFORE creating main window (close splash first)
     if settings.is_first_run():

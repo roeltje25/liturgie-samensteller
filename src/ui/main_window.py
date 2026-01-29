@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
     def __init__(self, base_path: str = ".", skip_first_run_check: bool = False):
         super().__init__()
         self.base_path = base_path
-        self.settings = Settings.load(os.path.join(base_path, "settings.json"))
+        self.settings = Settings.load()
 
         # Check for first run and show setup dialog (unless handled by main.py)
         if not skip_first_run_check and self.settings.is_first_run():
@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
 
         if folder:
             self.settings.base_folder = folder
-            self.settings.save(os.path.join(self.base_path, "settings.json"))
+            self.settings.save()
 
     def _generate_default_name(self) -> str:
         """Generate default liturgy name."""
@@ -440,7 +440,7 @@ class MainWindow(QMainWindow):
         lang = self.language_combo.itemData(index)
         set_language(lang)
         self.settings.language = lang
-        self.settings.save(os.path.join(self.base_path, "settings.json"))
+        self.settings.save()
 
     def _on_add_song(self) -> None:
         """Add a song to the liturgy."""
@@ -973,7 +973,7 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.settings, self.base_path, self)
         if dialog.exec():
             self.settings = dialog.get_settings()
-            self.settings.save(os.path.join(self.base_path, "settings.json"))
+            self.settings.save()
             # Reinitialize services with new settings and refresh folder scanner
             self.folder_scanner = FolderScanner(self.settings, self.base_path)
             self.folder_scanner.refresh()  # Force rescan with new settings
@@ -1156,6 +1156,6 @@ class MainWindow(QMainWindow):
         # Save window size
         self.settings.window_width = self.width()
         self.settings.window_height = self.height()
-        self.settings.save(os.path.join(self.base_path, "settings.json"))
+        self.settings.save()
 
         event.accept()

@@ -1,6 +1,6 @@
 """Models package."""
 
-from .settings import Settings
+from .settings import Settings, get_settings_path, get_config_dir
 from .liturgy import (
     # V2 classes (new)
     SectionType,
@@ -33,6 +33,8 @@ from .song import (
 
 __all__ = [
     "Settings",
+    "get_settings_path",
+    "get_config_dir",
     # V2 classes (new)
     "SectionType",
     "LiturgySlide",

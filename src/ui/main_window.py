@@ -60,13 +60,13 @@ from .about_dialog import AboutDialog
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, base_path: str = "."):
+    def __init__(self, base_path: str = ".", skip_first_run_check: bool = False):
         super().__init__()
         self.base_path = base_path
         self.settings = Settings.load(os.path.join(base_path, "settings.json"))
 
-        # Check for first run and show setup dialog
-        if self.settings.is_first_run():
+        # Check for first run and show setup dialog (unless handled by main.py)
+        if not skip_first_run_check and self.settings.is_first_run():
             self._show_first_run_dialog()
 
         self.liturgy = Liturgy(name=self._generate_default_name())

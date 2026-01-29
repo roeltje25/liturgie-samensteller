@@ -4,7 +4,7 @@ import sys
 import os
 
 # Minimal PyQt6 imports - get splash visible ASAP
-from PyQt6.QtWidgets import QApplication, QSplashScreen
+from PyQt6.QtWidgets import QApplication, QSplashScreen, QMessageBox, QFileDialog
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QLinearGradient
 from PyQt6.QtCore import Qt
 
@@ -54,6 +54,30 @@ def _create_splash_pixmap():
     return pixmap
 
 
+def _handle_first_run(base_path: str, settings) -> None:
+    """Handle first-run setup (called after splash is closed)."""
+    from .i18n import tr
+
+    # Show welcome message
+    msg = QMessageBox()
+    msg.setWindowTitle(tr("dialog.firstrun.title"))
+    msg.setText(tr("dialog.firstrun.message"))
+    msg.setIcon(QMessageBox.Icon.Information)
+    msg.addButton(tr("dialog.firstrun.select_folder"), QMessageBox.ButtonRole.AcceptRole)
+    msg.exec()
+
+    # Open folder selection
+    folder = QFileDialog.getExistingDirectory(
+        None,
+        tr("dialog.settings.base_folder"),
+        base_path
+    )
+
+    if folder:
+        settings.base_folder = folder
+        settings.save(os.path.join(base_path, "settings.json"))
+
+
 def main():
     """Run the application."""
     # Determine base path early
@@ -71,6 +95,7 @@ def main():
 
     # Heavy imports while splash is visible
     from .logging_config import log_startup_info
+    from .models import Settings
     from .ui import MainWindow
     from . import __version__
 
@@ -80,11 +105,27 @@ def main():
     app.setApplicationVersion(__version__)
     app.setOrganizationName("PowerPoint Mixer")
 
+    # Load settings and check for first run
+    splash.showMessage("Loading settings...", Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
+    app.processEvents()
+
+    settings = Settings.load(os.path.join(base_path, "settings.json"))
+
+    # Handle first run BEFORE creating main window (close splash first)
+    if settings.is_first_run():
+        splash.close()
+        _handle_first_run(base_path, settings)
+        # Recreate splash for remaining initialization
+        splash = QSplashScreen(_create_splash_pixmap())
+        splash.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
+        splash.show()
+        app.processEvents()
+
     # Create main window
     splash.showMessage("Initializing...", Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
     app.processEvents()
 
-    window = MainWindow(base_path)
+    window = MainWindow(base_path, skip_first_run_check=True)
 
     splash.finish(window)
     window.show()

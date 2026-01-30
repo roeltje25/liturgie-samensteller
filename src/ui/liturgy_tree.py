@@ -134,6 +134,17 @@ class LiturgyTreeWidget(QTreeWidget):
         self.setIndentation(20)
         self.setRootIsDecorated(True)
 
+        # Style drop indicator for better visibility
+        self.setStyleSheet("""
+            QTreeWidget::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+            QTreeWidget {
+                show-decoration-selected: 1;
+            }
+        """)
+
         # Enable context menu
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
@@ -610,17 +621,17 @@ class LiturgyTreeWidget(QTreeWidget):
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """Accept drag enter events for internal moves."""
+        # Always call super to handle visual feedback
+        super().dragEnterEvent(event)
         if event.source() == self:
             event.acceptProposedAction()
-        else:
-            super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         """Accept drag move events for internal moves."""
+        # Always call super to draw drop indicator
+        super().dragMoveEvent(event)
         if event.source() == self:
             event.acceptProposedAction()
-        else:
-            super().dragMoveEvent(event)
 
     def dropEvent(self, event: QDropEvent) -> None:
         """Handle drop event with constraints."""

@@ -186,11 +186,11 @@ class LiturgyTreeWidget(QTreeWidget):
         """Create a tree item for a section."""
         item = QTreeWidgetItem()
 
-        # Check if section contains only songs (all slides have song metadata)
+        # Check if section contains songs (has song metadata)
         is_song_section = section.is_song
         if not is_song_section and section.slides:
-            # Check if all slides have song metadata (youtube_links or pdf_path)
-            is_song_section = all(
+            # Check if any slide has song metadata (youtube_links or pdf_path)
+            is_song_section = any(
                 slide.youtube_links or slide.pdf_path
                 for slide in section.slides
             )
@@ -584,6 +584,10 @@ class LiturgyTreeWidget(QTreeWidget):
                 menu.addSeparator()
 
             menu.addAction(tr("button.edit"), self._edit_selected_slide)
+            menu.addSeparator()
+            menu.addAction(tr("menu.edit.move_up"), self._move_slide_up)
+            menu.addAction(tr("menu.edit.move_down"), self._move_slide_down)
+            menu.addAction(tr("menu.edit.delete"), self._delete_selected_slide)
 
         menu.exec(self.viewport().mapToGlobal(position))
 
@@ -935,6 +939,94 @@ class LiturgyTreeWidget(QTreeWidget):
             self._update_display()
             self.setCurrentItem(self.topLevelItem(index + 1))
             self.order_changed.emit()
+
+    def _move_slide_up(self) -> None:
+        """Move selected slide up within its section."""
+        selected = self.selectedItems()
+        if not selected or not self._liturgy:
+            return
+
+        item = selected[0]
+        item_type = item.data(0, Qt.ItemDataRole.UserRole)
+        if item_type != self.ITEM_TYPE_SLIDE:
+            return
+
+        parent = item.parent()
+        if not parent:
+            return
+
+        section_idx = self.indexOfTopLevelItem(parent)
+        slide_idx = parent.indexOfChild(item)
+
+        if section_idx < 0 or section_idx >= len(self._liturgy.sections):
+            return
+
+        if slide_idx > 0:
+            self._liturgy.move_slide_within_section(section_idx, slide_idx, slide_idx - 1)
+            self._update_display()
+            # Reselect the moved slide
+            new_parent = self.topLevelItem(section_idx)
+            if new_parent and slide_idx - 1 < new_parent.childCount():
+                self.setCurrentItem(new_parent.child(slide_idx - 1))
+            self.order_changed.emit()
+
+    def _move_slide_down(self) -> None:
+        """Move selected slide down within its section."""
+        selected = self.selectedItems()
+        if not selected or not self._liturgy:
+            return
+
+        item = selected[0]
+        item_type = item.data(0, Qt.ItemDataRole.UserRole)
+        if item_type != self.ITEM_TYPE_SLIDE:
+            return
+
+        parent = item.parent()
+        if not parent:
+            return
+
+        section_idx = self.indexOfTopLevelItem(parent)
+        slide_idx = parent.indexOfChild(item)
+
+        if section_idx < 0 or section_idx >= len(self._liturgy.sections):
+            return
+
+        section = self._liturgy.sections[section_idx]
+        if slide_idx < len(section.slides) - 1:
+            self._liturgy.move_slide_within_section(section_idx, slide_idx, slide_idx + 1)
+            self._update_display()
+            # Reselect the moved slide
+            new_parent = self.topLevelItem(section_idx)
+            if new_parent and slide_idx + 1 < new_parent.childCount():
+                self.setCurrentItem(new_parent.child(slide_idx + 1))
+            self.order_changed.emit()
+
+    def _delete_selected_slide(self) -> None:
+        """Delete the selected slide."""
+        selected = self.selectedItems()
+        if not selected or not self._liturgy:
+            return
+
+        item = selected[0]
+        item_type = item.data(0, Qt.ItemDataRole.UserRole)
+        if item_type != self.ITEM_TYPE_SLIDE:
+            return
+
+        section_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        slide_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
+
+        section = self._liturgy.get_section_by_id(section_id)
+        if not section:
+            return
+
+        # Find and remove the slide
+        for i, slide in enumerate(section.slides):
+            if slide.id == slide_id:
+                section.slides.pop(i)
+                break
+
+        self._update_display()
+        self.order_changed.emit()
 
     def _edit_selected_slide(self) -> None:
         """Trigger edit for selected slide."""

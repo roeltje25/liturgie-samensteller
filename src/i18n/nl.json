@@ -267,5 +267,17 @@
   "error.invalid_folder": "Ongeldige map: {path}",
 
   "language.nl": "Nederlands",
-  "language.en": "English"
+  "language.en": "English",
+
+  "warning.missing_pptx": "PowerPoint-bestand niet gevonden",
+  "warning.no_pptx": "Geen PowerPoint-bestand geconfigureerd",
+  "warning.missing_youtube": "Geen YouTube-link",
+  "warning.missing_pdf": "Geen muziek-PDF",
+  "warning.unfilled_fields": "Niet-ingevulde velden",
+  "warning.section_missing_pptx": "Dia's zonder PowerPoint",
+  "warning.section_missing_youtube": "Dia's zonder YouTube",
+  "warning.section_missing_pdf": "Dia's zonder PDF",
+  "warning.no_offering_file": "Collectebestand niet geconfigureerd of niet gevonden",
+
+  "tooltip.fields_filled": "Alle velden ingevuld"
 }

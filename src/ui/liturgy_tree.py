@@ -175,12 +175,22 @@ class LiturgyTreeWidget(QTreeWidget):
     def _display_sections(self) -> None:
         """Display v2 sections and their slides."""
         for section_idx, section in enumerate(self._liturgy.sections):
-            section_item = self._create_section_item(section, section_idx)
+            # Determine if this is a song section
+            is_song_section = section.is_song
+            if not is_song_section and section.slides:
+                is_song_section = any(
+                    slide.youtube_links or slide.pdf_path
+                    for slide in section.slides
+                )
+
+            section_item = self._create_section_item(section, section_idx, is_song_section)
             self.addTopLevelItem(section_item)
 
             # Add slides as children
             for slide_idx, slide in enumerate(section.slides):
-                slide_item = self._create_slide_item(slide, section.id, slide_idx, len(section.slides))
+                slide_item = self._create_slide_item(
+                    slide, section.id, slide_idx, len(section.slides), is_song_section
+                )
                 section_item.addChild(slide_item)
 
             # Expand by default
@@ -193,29 +203,64 @@ class LiturgyTreeWidget(QTreeWidget):
             section_item = self._create_item_as_section(item, item_idx)
             self.addTopLevelItem(section_item)
 
-    def _create_section_item(self, section: LiturgySection, index: int) -> QTreeWidgetItem:
+    def _create_section_item(
+        self, section: LiturgySection, index: int, is_song_section: bool = None
+    ) -> QTreeWidgetItem:
         """Create a tree item for a section."""
         item = QTreeWidgetItem()
 
-        # Check if section contains songs (has song metadata)
-        is_song_section = section.is_song
-        if not is_song_section and section.slides:
-            # Check if any slide has song metadata (youtube_links or pdf_path)
-            is_song_section = any(
-                slide.youtube_links or slide.pdf_path
-                for slide in section.slides
-            )
+        # Determine if this is a song section (if not passed)
+        if is_song_section is None:
+            is_song_section = section.is_song
+            if not is_song_section and section.slides:
+                is_song_section = any(
+                    slide.youtube_links or slide.pdf_path
+                    for slide in section.slides
+                )
+
+        # Track section-level warnings
+        warnings = []
+
+        # Check for missing PowerPoint in non-stub slides
+        slides_missing_pptx = [
+            s for s in section.slides
+            if not s.is_stub and (not s.source_path or not os.path.exists(s.source_path))
+        ]
+        has_pptx_error = len(slides_missing_pptx) > 0
 
         # Format display text
         icon = "🎵" if is_song_section else "📁"
         indicators = []
+
+        # PowerPoint status
+        if section.has_pptx and not has_pptx_error:
+            indicators.append("📊")  # PPT icon - all present
+        elif has_pptx_error:
+            indicators.append("❌")  # Missing PowerPoint error
+            warnings.append(f"{tr('warning.section_missing_pptx')}: {len(slides_missing_pptx)}")
+
+        # YouTube status (for songs)
         if is_song_section:
-            if section.has_pptx:
-                indicators.append("📊")  # PPT icon
-            if section.has_youtube or any(slide.youtube_links for slide in section.slides):
-                indicators.append("📺")  # YouTube icon
-            if section.has_pdf or any(slide.pdf_path for slide in section.slides):
-                indicators.append("📕")  # PDF icon
+            has_youtube = section.has_youtube or any(slide.youtube_links for slide in section.slides)
+            slides_missing_youtube = [
+                s for s in section.slides if not s.is_stub and not s.youtube_links
+            ]
+            if has_youtube:
+                indicators.append("📺")  # YouTube icon - present
+            elif slides_missing_youtube:
+                indicators.append("🔇")  # No YouTube links
+                warnings.append(f"{tr('warning.section_missing_youtube')}: {len(slides_missing_youtube)}")
+
+            # PDF status (for songs)
+            has_pdf = section.has_pdf or any(slide.pdf_path for slide in section.slides)
+            slides_missing_pdf = [
+                s for s in section.slides if not s.is_stub and not s.pdf_path
+            ]
+            if has_pdf:
+                indicators.append("📕")  # PDF icon - present
+            elif slides_missing_pdf:
+                indicators.append("📃")  # No music PDF
+                warnings.append(f"{tr('warning.section_missing_pdf')}: {len(slides_missing_pdf)}")
 
         indicator_text = " ".join(indicators)
         clean_name = self._clean_title(section.name)
@@ -223,14 +268,25 @@ class LiturgyTreeWidget(QTreeWidget):
         if indicator_text:
             display_text += f"  {indicator_text}"
 
+        # Add error indicator if there are critical warnings
+        if has_pptx_error:
+            display_text += " ⚠"
+
         item.setText(0, display_text)
         item.setData(0, Qt.ItemDataRole.UserRole, self.ITEM_TYPE_SECTION)
         item.setData(0, Qt.ItemDataRole.UserRole + 1, section.id)
 
-        # Style: bold for sections
+        # Set tooltip with warnings
+        if warnings:
+            item.setToolTip(0, "\n".join(warnings))
+
+        # Style: bold for sections, red foreground if error
         font = item.font(0)
         font.setBold(True)
         item.setFont(0, font)
+
+        if has_pptx_error:
+            item.setForeground(0, Qt.GlobalColor.red)
 
         # Allow children (slides) but not dropping of other sections
         item.setFlags(
@@ -243,7 +299,8 @@ class LiturgyTreeWidget(QTreeWidget):
         return item
 
     def _create_slide_item(
-        self, slide: LiturgySlide, section_id: str, index: int, total: int
+        self, slide: LiturgySlide, section_id: str, index: int, total: int,
+        is_song_section: bool = False
     ) -> QTreeWidgetItem:
         """Create a tree item for a slide."""
         item = QTreeWidgetItem()
@@ -252,14 +309,39 @@ class LiturgyTreeWidget(QTreeWidget):
         prefix = "└─" if index == total - 1 else "├─"
         clean_title = self._clean_title(slide.title) or f'Slide {index + 1}'
 
+        # Track warnings for tooltip
+        warnings = []
+
+        # Check PowerPoint status
+        has_pptx = slide.source_path and os.path.exists(slide.source_path)
+        pptx_missing = not slide.is_stub and not has_pptx
+
+        # Check if this is a song slide (section is song or slide has song metadata)
+        is_song_slide = is_song_section or slide.youtube_links or slide.pdf_path
+
         # Add indicators for slide-level properties
         indicators = []
-        if slide.source_path and os.path.exists(slide.source_path):
-            indicators.append("📊")  # PPT icon
+
+        # PowerPoint indicator
+        if has_pptx:
+            indicators.append("📊")  # PPT icon - present
+        elif pptx_missing:
+            indicators.append("❌")  # Missing PowerPoint - critical error
+            warnings.append(tr("warning.missing_pptx") if slide.source_path else tr("warning.no_pptx"))
+
+        # YouTube indicator (for songs)
         if slide.youtube_links:
-            indicators.append("📺")  # YouTube icon
+            indicators.append("📺")  # YouTube icon - present
+        elif is_song_slide and not slide.is_stub:
+            indicators.append("🔇")  # No YouTube link
+            warnings.append(tr("warning.missing_youtube"))
+
+        # PDF indicator (for songs)
         if slide.pdf_path:
-            indicators.append("📕")  # PDF icon
+            indicators.append("📕")  # PDF icon - present
+        elif is_song_slide and not slide.is_stub:
+            indicators.append("📃")  # No music PDF
+            warnings.append(tr("warning.missing_pdf"))
 
         display_text = f"{prefix} {clean_title}"
         if indicators:
@@ -272,10 +354,15 @@ class LiturgyTreeWidget(QTreeWidget):
         if all_fields:  # Has text pattern fields
             if unfilled:
                 display_text += " ⚠"  # Warning: unfilled fields
-                item.setToolTip(0, f"Unfilled fields: {', '.join(unfilled)}")
+                warnings.append(f"{tr('warning.unfilled_fields')}: {', '.join(unfilled)}")
             else:
                 display_text += " ✓"  # All fields filled
-                item.setToolTip(0, f"All fields filled: {', '.join(all_fields)}")
+
+        # Build comprehensive tooltip
+        if warnings:
+            item.setToolTip(0, "\n".join(warnings))
+        elif all_fields and not unfilled:
+            item.setToolTip(0, f"{tr('tooltip.fields_filled')}: {', '.join(all_fields)}")
 
         item.setText(0, display_text)
         item.setData(0, Qt.ItemDataRole.UserRole, self.ITEM_TYPE_SLIDE)
@@ -291,6 +378,10 @@ class LiturgyTreeWidget(QTreeWidget):
             Qt.ItemFlag.ItemIsSelectable |
             Qt.ItemFlag.ItemIsDragEnabled
         )
+
+        # Red text for missing PowerPoint (critical error)
+        if pptx_missing:
+            item.setForeground(0, Qt.GlobalColor.red)
 
         return item
 

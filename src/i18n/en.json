@@ -269,5 +269,17 @@
   "dialog.newsong.preview": "{count} slide(s) will be created",
   "dialog.newsong.create": "Create song",
   "dialog.newsong.folder_exists": "A song folder named '{name}' already exists. Overwrite?",
-  "dialog.newsong.error": "Could not create song: {error}"
+  "dialog.newsong.error": "Could not create song: {error}",
+
+  "warning.missing_pptx": "PowerPoint file not found",
+  "warning.no_pptx": "No PowerPoint file configured",
+  "warning.missing_youtube": "No YouTube link",
+  "warning.missing_pdf": "No music PDF",
+  "warning.unfilled_fields": "Unfilled fields",
+  "warning.section_missing_pptx": "Slides missing PowerPoint",
+  "warning.section_missing_youtube": "Slides missing YouTube",
+  "warning.section_missing_pdf": "Slides missing PDF",
+  "warning.no_offering_file": "Offering file not configured or not found",
+
+  "tooltip.fields_filled": "All fields filled"
 }

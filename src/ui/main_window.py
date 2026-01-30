@@ -92,6 +92,9 @@ class MainWindow(QMainWindow):
         # Apply translations
         self._update_translations()
 
+        # Check for configuration warnings
+        self._check_warnings()
+
         # Connect language change
         on_language_changed(self._on_language_changed)
 
@@ -223,6 +226,22 @@ class MainWindow(QMainWindow):
         service_info_layout.addRow(self.dienstleider_label, self.dienstleider_edit)
 
         right_layout.addWidget(self.service_info_group)
+
+        # Warning banner for missing offerings etc.
+        self.warning_label = QLabel()
+        self.warning_label.setStyleSheet("""
+            QLabel {
+                background-color: #fff3cd;
+                color: #856404;
+                border: 1px solid #ffc107;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+            }
+        """)
+        self.warning_label.setWordWrap(True)
+        self.warning_label.hide()  # Hidden by default
+        right_layout.addWidget(self.warning_label)
 
         self.liturgy_group = QGroupBox()
         liturgy_layout = QVBoxLayout(self.liturgy_group)
@@ -434,6 +453,23 @@ class MainWindow(QMainWindow):
         """Handle language change."""
         self._update_translations()
         self.liturgy_tree.refresh()
+        self._check_warnings()
+
+    def _check_warnings(self) -> None:
+        """Check for configuration warnings and display them."""
+        warnings = []
+
+        # Check if offering file exists
+        collecte_path = self.settings.get_collecte_path(self.base_path)
+        if not collecte_path or not os.path.exists(collecte_path):
+            warnings.append(f"⚠ {tr('warning.no_offering_file')}")
+
+        # Display warnings
+        if warnings:
+            self.warning_label.setText("\n".join(warnings))
+            self.warning_label.show()
+        else:
+            self.warning_label.hide()
 
     def _on_language_combo_changed(self, index: int) -> None:
         """Handle language combo box change."""
@@ -981,6 +1017,8 @@ class MainWindow(QMainWindow):
             self.theme_service = ThemeService(self.settings, self.base_path)
             # Refresh dienstleider autocomplete
             self._setup_dienstleider_autocomplete()
+            # Recheck warnings (offering file may have changed)
+            self._check_warnings()
 
     def _on_open_theme(self) -> None:
         """Open a theme template as liturgy."""

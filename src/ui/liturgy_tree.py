@@ -672,11 +672,11 @@ class LiturgyTreeWidget(QTreeWidget):
                     return
 
                 # Adjust for drop indicator position
+                # AboveItem/OnItem = take target's position
+                # BelowItem = insert after target
                 if drop_indicator == QAbstractItemView.DropIndicatorPosition.BelowItem:
                     target_idx += 1
-                elif drop_indicator == QAbstractItemView.DropIndicatorPosition.OnItem:
-                    # Dropping ON a section - treat as dropping below it
-                    target_idx += 1
+                # OnItem: no adjustment, section takes target's position
 
         # Adjust target if dragging from above
         if dragged_idx < target_idx:
@@ -693,7 +693,13 @@ class LiturgyTreeWidget(QTreeWidget):
             self.order_changed.emit()
 
     def _do_slide_drop(self, dragged_item: QTreeWidgetItem, target_item: QTreeWidgetItem, drop_indicator) -> None:
-        """Handle slide reordering - within section or between sections."""
+        """Handle slide reordering - within section or between sections.
+
+        Drop indicator logic:
+        - AboveItem: Insert BEFORE the target (at target's current index)
+        - BelowItem: Insert AFTER the target (at target's index + 1)
+        - OnItem: Insert AFTER the target (at target's index + 1)
+        """
         if not self._liturgy.sections:
             return
 
@@ -739,22 +745,28 @@ class LiturgyTreeWidget(QTreeWidget):
             if target_slide_idx < 0:
                 return
 
-            # Adjust for drop indicator
+            # Adjust for drop indicator position
+            # AboveItem = take target's position (most intuitive for "drop on item")
+            # OnItem = same as AboveItem (take target's position)
+            # BelowItem = insert after target
             if drop_indicator == QAbstractItemView.DropIndicatorPosition.BelowItem:
                 target_slide_idx += 1
-            elif drop_indicator == QAbstractItemView.DropIndicatorPosition.OnItem:
-                # Dropping ON a slide - insert after it
-                target_slide_idx += 1
+            # AboveItem and OnItem: no adjustment, item takes target's position
 
         # Check if moving within same section or between sections
         if source_section_idx == target_section_idx:
             # Moving within same section
-            # Adjust target if dragging from above
+            # target_slide_idx is the insertion index (0 to N)
+
+            # If dragging from above the insertion point, the removal will shift indices down
+            # So we need to adjust the target index
             if dragged_slide_idx < target_slide_idx:
                 target_slide_idx -= 1
 
-            # Clamp to valid range
-            target_slide_idx = max(0, min(target_slide_idx, len(source_section.slides) - 1))
+            # Now target_slide_idx is the final position after the move
+            # Clamp to valid range (0 to N-1)
+            max_idx = len(source_section.slides) - 1
+            target_slide_idx = max(0, min(target_slide_idx, max_idx))
 
             if dragged_slide_idx != target_slide_idx:
                 self._liturgy.move_slide_within_section(source_section_idx, dragged_slide_idx, target_slide_idx)
@@ -765,7 +777,11 @@ class LiturgyTreeWidget(QTreeWidget):
                     self.setCurrentItem(new_section_item.child(target_slide_idx))
                 self.order_changed.emit()
         else:
-            # Moving between sections
+            # Moving between sections - target_slide_idx is insertion index
+            # Clamp to valid range for the target section (0 to N, where N is current length)
+            max_idx = len(target_section.slides)
+            target_slide_idx = max(0, min(target_slide_idx, max_idx))
+
             self._liturgy.move_slide_to_section(
                 source_section_idx, dragged_slide_idx,
                 target_section_idx, target_slide_idx
@@ -773,10 +789,11 @@ class LiturgyTreeWidget(QTreeWidget):
             self._update_display()
             # Select the moved item in new location
             new_section_item = self.topLevelItem(target_section_idx)
-            # Clamp target_slide_idx for selection
+            # After insertion, the slide is at target_slide_idx
             actual_idx = min(target_slide_idx, new_section_item.childCount() - 1) if new_section_item else 0
             if new_section_item and actual_idx >= 0 and actual_idx < new_section_item.childCount():
                 self.setCurrentItem(new_section_item.child(actual_idx))
+            self.order_changed.emit()
             self.order_changed.emit()
 
     def _rebuild_from_tree(self) -> None:

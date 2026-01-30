@@ -1152,14 +1152,19 @@ class PptxService:
 
         for section in liturgy.sections:
             if section.is_song:
-                # For song sections, add all slides from the source ONCE
-                # (not per slide entry in the section)
-                if section.slides:
-                    slide = section.slides[0]  # Use first slide for source info
+                # For song sections, each slide entry represents a song
+                # Group slides by source_path to avoid duplicating slides from same file
+                processed_sources = set()
+                for slide in section.slides:
                     if slide.is_stub:
                         stub_path = self._create_stub_presentation(slide.title or section.name)
                         slides_to_copy.append((stub_path, [0], {0: slide.fields}))
                     elif slide.source_path and os.path.exists(slide.source_path):
+                        # Check if we already processed this source file
+                        if slide.source_path in processed_sources:
+                            continue
+                        processed_sources.add(slide.source_path)
+
                         slide_count = self.get_slide_count(slide.source_path)
                         slides_to_copy.append((
                             slide.source_path,

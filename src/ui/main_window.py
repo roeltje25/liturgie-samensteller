@@ -536,7 +536,28 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             item = dialog.get_selected_item()
             if item:
-                self.liturgy.add_item(item)
+                # For external files with multiple slides, create a section with all slides
+                if item.pptx_path and os.path.exists(item.pptx_path) and not item.is_stub:
+                    slide_count = self.pptx_service.get_slide_count(item.pptx_path)
+                    if slide_count > 1:
+                        # Create section with all slides
+                        section = LiturgySection(
+                            name=item.title,
+                            section_type=SectionType.REGULAR,
+                        )
+                        for i in range(slide_count):
+                            slide = LiturgySlide(
+                                title=f"{item.title} - Slide {i + 1}" if slide_count > 1 else item.title,
+                                slide_index=i,
+                                source_path=item.pptx_path,
+                                is_stub=False,
+                            )
+                            section.slides.append(slide)
+                        self.liturgy.add_section(section)
+                    else:
+                        self.liturgy.add_item(item)
+                else:
+                    self.liturgy.add_item(item)
                 self.liturgy_tree.set_liturgy(self.liturgy)
                 self.unsaved_changes = True
 

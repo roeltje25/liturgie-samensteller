@@ -180,11 +180,17 @@ class PptxService:
                 logger.error(f"Failed to create stub presentation: {e}", exc_info=True)
                 raise
 
-    def _merge_with_vbscript(self, slides_to_copy: List[Tuple[str, List[int]]]) -> str:
+    def _merge_with_vbscript(
+        self,
+        slides_to_copy: List[Tuple[str, List[int]]],
+        section_info: List[Tuple[str, int, int]] = None
+    ) -> str:
         """
         Merge presentations by generating and executing a VBScript in PowerPoint.
         This approach lets PowerPoint handle the merge natively, preserving all formatting.
         Uses InsertFromFile to properly handle Designer-created slides and special elements.
+
+        section_info: List of (section_name, start_slide_idx, slide_count) for creating sections
         """
         temp_path = tempfile.mktemp(suffix='.pptx')
         abs_temp = os.path.abspath(temp_path).replace("/", "\\")
@@ -266,16 +272,39 @@ class PptxService:
         # Add save and cleanup code
         vbs_lines.extend([
             '\'Remove the initial blank slide if we added slides',
+            'Dim blankSlideRemoved',
+            'blankSlideRemoved = False',
             'If targetPres.Slides.Count > 1 Then',
             '    On Error Resume Next',
             '    Dim firstSlideShapeCount',
             '    firstSlideShapeCount = targetPres.Slides(1).Shapes.Count',
             '    If firstSlideShapeCount = 0 Then',
             '        targetPres.Slides(1).Delete',
+            '        blankSlideRemoved = True',
             '    End If',
             '    On Error GoTo 0',
             'End If',
             '',
+        ])
+
+        # Add sections if section_info is provided
+        if section_info:
+            vbs_lines.append('\'Add sections to organize slides')
+            vbs_lines.append('On Error Resume Next')
+            for section_name, start_idx, slide_count in section_info:
+                # Escape section name for VBScript
+                escaped_name = section_name.replace('"', '""')
+                # start_idx is 0-based, PowerPoint uses 1-based
+                # If blank slide was removed, we don't need to adjust since start_idx is relative to inserted slides
+                ppt_start_idx = start_idx + 1  # Convert to 1-based
+                vbs_lines.append(f'Dim sectionIdx_{start_idx}')
+                vbs_lines.append(f'sectionIdx_{start_idx} = {ppt_start_idx}')
+                vbs_lines.append(f'If Not blankSlideRemoved Then sectionIdx_{start_idx} = sectionIdx_{start_idx} + 1')
+                vbs_lines.append(f'targetPres.SectionProperties.AddSection sectionIdx_{start_idx}, "{escaped_name}"')
+            vbs_lines.append('On Error GoTo 0')
+            vbs_lines.append('')
+
+        vbs_lines.extend([
             '\'Save as PPTX',
             f'targetPres.SaveAs "{escaped_output}", ppSaveAsOpenXMLPresentation',
             '',
@@ -1149,8 +1178,14 @@ class PptxService:
 
         # Collect all source files and slide indices to copy
         slides_to_copy = []  # List of (pptx_path, slide_indices, fields_by_index)
+        # Track sections: list of (section_name, start_slide_idx, slide_count)
+        section_info = []
+        current_slide_idx = 0
 
         for section in liturgy.sections:
+            section_start = current_slide_idx
+            section_slide_count = 0
+
             if section.is_song:
                 # For song sections, each slide entry represents a song
                 # Group slides by source_path to avoid duplicating slides from same file
@@ -1159,6 +1194,7 @@ class PptxService:
                     if slide.is_stub:
                         stub_path = self._create_stub_presentation(slide.title or section.name)
                         slides_to_copy.append((stub_path, [0], {0: slide.fields}))
+                        section_slide_count += 1
                     elif slide.source_path and os.path.exists(slide.source_path):
                         # Check if we already processed this source file
                         if slide.source_path in processed_sources:
@@ -1171,18 +1207,26 @@ class PptxService:
                             list(range(slide_count)),
                             {i: slide.fields for i in range(slide_count)},
                         ))
+                        section_slide_count += slide_count
             else:
                 # For regular sections, process each slide individually
                 for slide in section.slides:
                     if slide.is_stub:
                         stub_path = self._create_stub_presentation(slide.title or section.name)
                         slides_to_copy.append((stub_path, [0], {0: slide.fields}))
+                        section_slide_count += 1
                     elif slide.source_path and os.path.exists(slide.source_path):
                         slides_to_copy.append((
                             slide.source_path,
                             [slide.slide_index],
                             {slide.slide_index: slide.fields},
                         ))
+                        section_slide_count += 1
+
+            # Record section info if it has slides
+            if section_slide_count > 0:
+                section_info.append((section.name, section_start, section_slide_count))
+                current_slide_idx += section_slide_count
 
         if not slides_to_copy:
             # No slides to copy, create empty presentation
@@ -1206,7 +1250,8 @@ class PptxService:
             try:
                 # For VBScript, we need to fill fields after merging
                 result_path = self._merge_with_vbscript(
-                    [(path, indices) for path, indices, _ in slides_to_copy]
+                    [(path, indices) for path, indices, _ in slides_to_copy],
+                    section_info
                 )
 
                 # Apply fields to merged result

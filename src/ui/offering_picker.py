@@ -363,11 +363,13 @@ class OfferingPickerDialog(QDialog):
             )
 
         if self._selected_slide:
+            # Always provide actual path (custom or default offering file)
+            actual_pptx_path = self._custom_pptx_path or self.settings.get_collecte_path(self.base_path)
             return OfferingLiturgyItem(
                 title=tr("item.offering"),
                 slide_index=self._selected_slide.index,
                 slide_title=self._selected_slide.title,
-                pptx_path=self._custom_pptx_path,  # None if using default
+                pptx_path=actual_pptx_path,
                 is_stub=False,
             )
 

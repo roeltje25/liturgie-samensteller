@@ -12,8 +12,6 @@ from dataclasses import dataclass, field
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
-from pptx.enum.dml import MSO_THEME_COLOR
-from pptx.dml.color import RGBColor
 
 from ..logging_config import get_logger
 
@@ -186,24 +184,10 @@ class PptxService:
         """
         Merge presentations by generating and executing a VBScript in PowerPoint.
         This approach lets PowerPoint handle the merge natively, preserving all formatting.
-        Uses the first presentation as base to preserve its theme, then inserts from others.
+        Uses InsertFromFile to properly handle Designer-created slides and special elements.
         """
-        if not slides_to_copy:
-            # No slides, create empty presentation
-            temp_path = tempfile.mktemp(suffix='.pptx')
-            prs = Presentation()
-            prs.slide_width = Inches(13.333)
-            prs.slide_height = Inches(7.5)
-            prs.save(temp_path)
-            return temp_path
-
         temp_path = tempfile.mktemp(suffix='.pptx')
         abs_temp = os.path.abspath(temp_path).replace("/", "\\")
-
-        # Get first source file info
-        first_source, first_indices = slides_to_copy[0]
-        first_source_abs = os.path.abspath(first_source).replace("/", "\\")
-        first_source_escaped = first_source_abs.replace("\\", "\\\\")
 
         # Build the VBScript
         vbs_lines = [
@@ -212,8 +196,8 @@ class PptxService:
             'Const ppSaveAsOpenXMLPresentation = 24',
             'Const ppWindowMinimized = 2',
             '',
-            'Dim pptApp, targetPres, sourcePres',
-            'Dim fso, slideIndex, i',
+            'Dim pptApp, targetPres, sourcePres, baseDesign',
+            'Dim fso, slideIndex, insertedSlide',
             '',
             'On Error Resume Next',
             '',
@@ -232,52 +216,19 @@ class PptxService:
             '\'Create file system object for file existence checks',
             'Set fso = CreateObject("Scripting.FileSystemObject")',
             '',
-            '\'Open first presentation as base (preserves its theme)',
-            f'Set targetPres = pptApp.Presentations.Open("{first_source_escaped}", True, False, False)',
-            'If Err.Number <> 0 Then',
-            '    WScript.Echo "Error: Could not open base presentation. " & Err.Description',
-            '    pptApp.Quit',
-            '    WScript.Quit 1',
-            'End If',
+            '\'Create a new presentation as target',
+            'Set targetPres = pptApp.Presentations.Add(True)',
             '',
-            '\'Delete slides we do not need from the base presentation',
-            'Dim slidesToKeep()',
+            '\'Track where to insert next slide',
+            'slideIndex = 0',
+            '',
+            '\'Give PowerPoint time to initialize',
+            'WScript.Sleep 500',
+            '',
         ]
 
-        # Build array of slides to keep from first presentation (1-based for VBScript)
-        keep_indices_vbs = ", ".join(str(i + 1) for i in first_indices)
-        vbs_lines.append(f'ReDim slidesToKeep({len(first_indices) - 1})')
-        for i, idx in enumerate(first_indices):
-            vbs_lines.append(f'slidesToKeep({i}) = {idx + 1}')
-
-        vbs_lines.extend([
-            '',
-            '\'Delete slides not in our keep list (in reverse order)',
-            'For i = targetPres.Slides.Count To 1 Step -1',
-            '    Dim keepThis',
-            '    keepThis = False',
-            '    Dim j',
-            '    For j = 0 To UBound(slidesToKeep)',
-            '        If slidesToKeep(j) = i Then',
-            '            keepThis = True',
-            '            Exit For',
-            '        End If',
-            '    Next',
-            '    If Not keepThis Then',
-            '        targetPres.Slides(i).Delete',
-            '    End If',
-            'Next',
-            '',
-            '\'Track where to insert next slide (after current slides)',
-            'slideIndex = targetPres.Slides.Count',
-            '',
-            '\'Give PowerPoint time to process',
-            'WScript.Sleep 300',
-            '',
-        ])
-
-        # Add slide insertion commands for remaining source files (skip first, already open)
-        for source_path, slide_indices in slides_to_copy[1:]:
+        # Add slide insertion commands for each source file
+        for source_path, slide_indices in slides_to_copy:
             if not os.path.exists(source_path):
                 continue
 
@@ -314,7 +265,18 @@ class PptxService:
 
         # Add save and cleanup code
         vbs_lines.extend([
-            '\'Save as PPTX (to new location, preserving the original)',
+            '\'Remove the initial blank slide if we added slides',
+            'If targetPres.Slides.Count > 1 Then',
+            '    On Error Resume Next',
+            '    Dim firstSlideShapeCount',
+            '    firstSlideShapeCount = targetPres.Slides(1).Shapes.Count',
+            '    If firstSlideShapeCount = 0 Then',
+            '        targetPres.Slides(1).Delete',
+            '    End If',
+            '    On Error GoTo 0',
+            'End If',
+            '',
+            '\'Save as PPTX',
             f'targetPres.SaveAs "{escaped_output}", ppSaveAsOpenXMLPresentation',
             '',
             '\'Close and cleanup',
@@ -437,65 +399,13 @@ class PptxService:
 
         # Copy slide background if present
         try:
-            self._copy_slide_background(source_slide, new_slide)
-        except Exception as e:
-            logger.debug(f"Failed to copy background: {e}")
+            if source_slide.background.fill.type is not None:
+                # Try to copy background
+                pass  # Background copying is complex, skip for now
+        except Exception:
+            pass
 
         return new_slide
-
-    def _copy_slide_background(self, source_slide, target_slide) -> None:
-        """Copy the background from source slide to target slide."""
-        from pptx.enum.dml import MSO_FILL_TYPE
-        from io import BytesIO
-
-        source_bg = source_slide.background
-        target_bg = target_slide.background
-
-        # Check if source has a background fill
-        if source_bg.fill.type is None:
-            return
-
-        fill_type = source_bg.fill.type
-
-        if fill_type == MSO_FILL_TYPE.SOLID:
-            # Solid color background
-            try:
-                target_bg.fill.solid()
-                # Try to get the actual RGB color
-                fore_color = source_bg.fill.fore_color
-                if fore_color.type == MSO_THEME_COLOR.NOT_THEME_COLOR:
-                    # Direct RGB color
-                    target_bg.fill.fore_color.rgb = fore_color.rgb
-                else:
-                    # Theme color - try to get the actual color value
-                    try:
-                        target_bg.fill.fore_color.rgb = fore_color.rgb
-                    except Exception:
-                        # Fall back to theme color reference
-                        target_bg.fill.fore_color.theme_color = fore_color.theme_color
-            except Exception as e:
-                logger.debug(f"Failed to copy solid background: {e}")
-
-        elif fill_type == MSO_FILL_TYPE.PICTURE:
-            # Picture/image background
-            try:
-                image_blob = source_bg.fill._fill._pic.blob
-                image_stream = BytesIO(image_blob)
-                target_bg.fill.background()
-                # python-pptx doesn't easily support setting picture backgrounds
-                # This is a limitation of the library
-                logger.debug("Picture backgrounds not fully supported in python-pptx")
-            except Exception as e:
-                logger.debug(f"Failed to copy picture background: {e}")
-
-        elif fill_type == MSO_FILL_TYPE.GRADIENT:
-            # Gradient background - complex to copy
-            try:
-                # Try to copy at least the start and end colors
-                target_bg.fill.gradient()
-                logger.debug("Gradient backgrounds partially supported")
-            except Exception as e:
-                logger.debug(f"Failed to copy gradient background: {e}")
 
     def _copy_shape_to_slide(self, shape, target_slide, source_slide):
         """Copy a single shape to target slide."""
@@ -605,22 +515,8 @@ class PptxService:
                                 target_run.font.italic = run.font.italic
                             if run.font.name:
                                 target_run.font.name = run.font.name
-                            # Copy font color - handle both RGB and theme colors
-                            if run.font.color:
-                                try:
-                                    # Try direct RGB first
-                                    if run.font.color.rgb:
-                                        target_run.font.color.rgb = run.font.color.rgb
-                                except Exception:
-                                    try:
-                                        # Try to get theme color and convert to RGB
-                                        if run.font.color.theme_color is not None:
-                                            # Get the actual RGB value from the theme
-                                            rgb_val = run.font.color._color.rgb
-                                            if rgb_val:
-                                                target_run.font.color.rgb = rgb_val
-                                    except Exception:
-                                        pass
+                            if run.font.color and run.font.color.rgb:
+                                target_run.font.color.rgb = run.font.color.rgb
                         except Exception:
                             pass
 

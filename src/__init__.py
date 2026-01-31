@@ -3,7 +3,7 @@
 import subprocess
 import os
 
-__version__ = "1.1.18"
+__version__ = "1.1.19"
 
 
 def _get_git_revision() -> str:

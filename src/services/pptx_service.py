@@ -186,10 +186,24 @@ class PptxService:
         """
         Merge presentations by generating and executing a VBScript in PowerPoint.
         This approach lets PowerPoint handle the merge natively, preserving all formatting.
-        Uses InsertFromFile to properly handle Designer-created slides and special elements.
+        Uses the first presentation as base to preserve its theme, then inserts from others.
         """
+        if not slides_to_copy:
+            # No slides, create empty presentation
+            temp_path = tempfile.mktemp(suffix='.pptx')
+            prs = Presentation()
+            prs.slide_width = Inches(13.333)
+            prs.slide_height = Inches(7.5)
+            prs.save(temp_path)
+            return temp_path
+
         temp_path = tempfile.mktemp(suffix='.pptx')
         abs_temp = os.path.abspath(temp_path).replace("/", "\\")
+
+        # Get first source file info
+        first_source, first_indices = slides_to_copy[0]
+        first_source_abs = os.path.abspath(first_source).replace("/", "\\")
+        first_source_escaped = first_source_abs.replace("\\", "\\\\")
 
         # Build the VBScript
         vbs_lines = [
@@ -198,8 +212,8 @@ class PptxService:
             'Const ppSaveAsOpenXMLPresentation = 24',
             'Const ppWindowMinimized = 2',
             '',
-            'Dim pptApp, targetPres, sourcePres, baseDesign',
-            'Dim fso, slideIndex, insertedSlide',
+            'Dim pptApp, targetPres, sourcePres',
+            'Dim fso, slideIndex, i',
             '',
             'On Error Resume Next',
             '',
@@ -218,19 +232,52 @@ class PptxService:
             '\'Create file system object for file existence checks',
             'Set fso = CreateObject("Scripting.FileSystemObject")',
             '',
-            '\'Create a new presentation as target',
-            'Set targetPres = pptApp.Presentations.Add(True)',
+            '\'Open first presentation as base (preserves its theme)',
+            f'Set targetPres = pptApp.Presentations.Open("{first_source_escaped}", True, False, False)',
+            'If Err.Number <> 0 Then',
+            '    WScript.Echo "Error: Could not open base presentation. " & Err.Description',
+            '    pptApp.Quit',
+            '    WScript.Quit 1',
+            'End If',
             '',
-            '\'Track where to insert next slide',
-            'slideIndex = 0',
-            '',
-            '\'Give PowerPoint time to initialize',
-            'WScript.Sleep 500',
-            '',
+            '\'Delete slides we do not need from the base presentation',
+            'Dim slidesToKeep()',
         ]
 
-        # Add slide insertion commands for each source file
-        for source_path, slide_indices in slides_to_copy:
+        # Build array of slides to keep from first presentation (1-based for VBScript)
+        keep_indices_vbs = ", ".join(str(i + 1) for i in first_indices)
+        vbs_lines.append(f'ReDim slidesToKeep({len(first_indices) - 1})')
+        for i, idx in enumerate(first_indices):
+            vbs_lines.append(f'slidesToKeep({i}) = {idx + 1}')
+
+        vbs_lines.extend([
+            '',
+            '\'Delete slides not in our keep list (in reverse order)',
+            'For i = targetPres.Slides.Count To 1 Step -1',
+            '    Dim keepThis',
+            '    keepThis = False',
+            '    Dim j',
+            '    For j = 0 To UBound(slidesToKeep)',
+            '        If slidesToKeep(j) = i Then',
+            '            keepThis = True',
+            '            Exit For',
+            '        End If',
+            '    Next',
+            '    If Not keepThis Then',
+            '        targetPres.Slides(i).Delete',
+            '    End If',
+            'Next',
+            '',
+            '\'Track where to insert next slide (after current slides)',
+            'slideIndex = targetPres.Slides.Count',
+            '',
+            '\'Give PowerPoint time to process',
+            'WScript.Sleep 300',
+            '',
+        ])
+
+        # Add slide insertion commands for remaining source files (skip first, already open)
+        for source_path, slide_indices in slides_to_copy[1:]:
             if not os.path.exists(source_path):
                 continue
 
@@ -267,18 +314,7 @@ class PptxService:
 
         # Add save and cleanup code
         vbs_lines.extend([
-            '\'Remove the initial blank slide if we added slides',
-            'If targetPres.Slides.Count > 1 Then',
-            '    On Error Resume Next',
-            '    Dim firstSlideShapeCount',
-            '    firstSlideShapeCount = targetPres.Slides(1).Shapes.Count',
-            '    If firstSlideShapeCount = 0 Then',
-            '        targetPres.Slides(1).Delete',
-            '    End If',
-            '    On Error GoTo 0',
-            'End If',
-            '',
-            '\'Save as PPTX',
+            '\'Save as PPTX (to new location, preserving the original)',
             f'targetPres.SaveAs "{escaped_output}", ppSaveAsOpenXMLPresentation',
             '',
             '\'Close and cleanup',

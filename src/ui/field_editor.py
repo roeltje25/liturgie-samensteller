@@ -261,10 +261,25 @@ class BulkFieldEditor(QDialog):
         quick_group = QGroupBox(tr("dialog.fields.quick_fill"))
         quick_layout = QHBoxLayout(quick_group)
 
-        # Date field
+        # Date field - pre-fill with service date if available
         quick_layout.addWidget(QLabel(tr("dialog.fields.date")))
         self.date_input = QLineEdit()
         self.date_input.setPlaceholderText("26 januari 2026")
+        # Pre-fill with service date formatted nicely
+        if self.liturgy.service_date:
+            try:
+                from datetime import date
+                import locale
+                service_date = date.fromisoformat(self.liturgy.service_date)
+                # Format as "26 januari 2026" style
+                try:
+                    locale.setlocale(locale.LC_TIME, '')  # Use system locale
+                    formatted_date = service_date.strftime("%d %B %Y").lstrip('0')
+                except Exception:
+                    formatted_date = service_date.strftime("%d %B %Y").lstrip('0')
+                self.date_input.setText(formatted_date)
+            except Exception:
+                pass
         quick_layout.addWidget(self.date_input)
 
         self.apply_date_btn = QPushButton(tr("dialog.fields.apply"))

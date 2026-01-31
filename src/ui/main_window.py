@@ -134,6 +134,8 @@ class MainWindow(QMainWindow):
             days_until_sunday = 7  # If today is Sunday, get next Sunday
         next_sunday = today + timedelta(days=days_until_sunday)
         self.service_date_edit.setDate(QDate(next_sunday.year, next_sunday.month, next_sunday.day))
+        # Also set liturgy service_date (signal not connected yet during init)
+        self.liturgy.service_date = next_sunday.strftime("%Y-%m-%d")
 
     def _setup_dienstleider_autocomplete(self) -> None:
         """Setup autocomplete for dienstleider field from Excel."""

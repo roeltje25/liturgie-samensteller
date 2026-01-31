@@ -1208,7 +1208,20 @@ class PptxService:
                 result_path = self._merge_with_vbscript(
                     [(path, indices) for path, indices, _ in slides_to_copy]
                 )
-                # TODO: Apply fields to merged result
+
+                # Apply fields to merged result
+                # Build a mapping of result slide index -> fields
+                result_slide_idx = 0
+                fields_for_result = {}
+                for _, slide_indices, fields_by_index in slides_to_copy:
+                    for src_idx in slide_indices:
+                        if src_idx in fields_by_index and fields_by_index[src_idx]:
+                            fields_for_result[result_slide_idx] = fields_by_index[src_idx]
+                        result_slide_idx += 1
+
+                if fields_for_result:
+                    result_path = self.fill_presentation_fields(result_path, fields_for_result)
+
                 return result_path
             except Exception as e:
                 print(f"VBScript merge failed: {e}, falling back to python-pptx")

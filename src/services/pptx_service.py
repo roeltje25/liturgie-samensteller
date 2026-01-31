@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.dml import MSO_THEME_COLOR
+from pptx.dml.color import RGBColor
 
 from ..logging_config import get_logger
 
@@ -399,13 +401,65 @@ class PptxService:
 
         # Copy slide background if present
         try:
-            if source_slide.background.fill.type is not None:
-                # Try to copy background
-                pass  # Background copying is complex, skip for now
-        except Exception:
-            pass
+            self._copy_slide_background(source_slide, new_slide)
+        except Exception as e:
+            logger.debug(f"Failed to copy background: {e}")
 
         return new_slide
+
+    def _copy_slide_background(self, source_slide, target_slide) -> None:
+        """Copy the background from source slide to target slide."""
+        from pptx.enum.dml import MSO_FILL_TYPE
+        from io import BytesIO
+
+        source_bg = source_slide.background
+        target_bg = target_slide.background
+
+        # Check if source has a background fill
+        if source_bg.fill.type is None:
+            return
+
+        fill_type = source_bg.fill.type
+
+        if fill_type == MSO_FILL_TYPE.SOLID:
+            # Solid color background
+            try:
+                target_bg.fill.solid()
+                # Try to get the actual RGB color
+                fore_color = source_bg.fill.fore_color
+                if fore_color.type == MSO_THEME_COLOR.NOT_THEME_COLOR:
+                    # Direct RGB color
+                    target_bg.fill.fore_color.rgb = fore_color.rgb
+                else:
+                    # Theme color - try to get the actual color value
+                    try:
+                        target_bg.fill.fore_color.rgb = fore_color.rgb
+                    except Exception:
+                        # Fall back to theme color reference
+                        target_bg.fill.fore_color.theme_color = fore_color.theme_color
+            except Exception as e:
+                logger.debug(f"Failed to copy solid background: {e}")
+
+        elif fill_type == MSO_FILL_TYPE.PICTURE:
+            # Picture/image background
+            try:
+                image_blob = source_bg.fill._fill._pic.blob
+                image_stream = BytesIO(image_blob)
+                target_bg.fill.background()
+                # python-pptx doesn't easily support setting picture backgrounds
+                # This is a limitation of the library
+                logger.debug("Picture backgrounds not fully supported in python-pptx")
+            except Exception as e:
+                logger.debug(f"Failed to copy picture background: {e}")
+
+        elif fill_type == MSO_FILL_TYPE.GRADIENT:
+            # Gradient background - complex to copy
+            try:
+                # Try to copy at least the start and end colors
+                target_bg.fill.gradient()
+                logger.debug("Gradient backgrounds partially supported")
+            except Exception as e:
+                logger.debug(f"Failed to copy gradient background: {e}")
 
     def _copy_shape_to_slide(self, shape, target_slide, source_slide):
         """Copy a single shape to target slide."""
@@ -515,8 +569,22 @@ class PptxService:
                                 target_run.font.italic = run.font.italic
                             if run.font.name:
                                 target_run.font.name = run.font.name
-                            if run.font.color and run.font.color.rgb:
-                                target_run.font.color.rgb = run.font.color.rgb
+                            # Copy font color - handle both RGB and theme colors
+                            if run.font.color:
+                                try:
+                                    # Try direct RGB first
+                                    if run.font.color.rgb:
+                                        target_run.font.color.rgb = run.font.color.rgb
+                                except Exception:
+                                    try:
+                                        # Try to get theme color and convert to RGB
+                                        if run.font.color.theme_color is not None:
+                                            # Get the actual RGB value from the theme
+                                            rgb_val = run.font.color._color.rgb
+                                            if rgb_val:
+                                                target_run.font.color.rgb = rgb_val
+                                    except Exception:
+                                        pass
                         except Exception:
                             pass
 

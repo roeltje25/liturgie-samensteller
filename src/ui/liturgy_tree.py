@@ -316,6 +316,9 @@ class LiturgyTreeWidget(QTreeWidget):
         has_pptx = slide.source_path and os.path.exists(slide.source_path)
         pptx_missing = not slide.is_stub and not has_pptx
 
+        # Debug logging for PPTX status
+        logger.debug(f"Slide '{slide.title}': source_path={slide.source_path!r}, exists={os.path.exists(slide.source_path) if slide.source_path else 'N/A'}, is_stub={slide.is_stub}, pptx_missing={pptx_missing}")
+
         # Check if this is a song slide (section is song or slide has song metadata)
         is_song_slide = is_song_section or slide.youtube_links or slide.pdf_path
 

@@ -188,12 +188,27 @@ class PptxService:
         """
         Merge presentations by generating and executing a VBScript in PowerPoint.
         This approach lets PowerPoint handle the merge natively, preserving all formatting.
-        Uses InsertFromFile to properly handle Designer-created slides and special elements.
+        Uses a two-pass approach:
+        1. First clone all slide masters/designs from source files using Designs.Clone
+        2. Then import slides and reassign them to the correct cloned masters
 
         section_info: List of (section_name, start_slide_idx, slide_count) for creating sections
         """
         temp_path = tempfile.mktemp(suffix='.pptx')
         abs_temp = os.path.abspath(temp_path).replace("/", "\\")
+
+        # Collect unique source files for master import
+        unique_sources = []
+        seen_sources = set()
+        for source_path, slide_indices in slides_to_copy:
+            if not os.path.exists(source_path):
+                continue
+            abs_source = os.path.abspath(source_path).replace("/", "\\")
+            if abs_source not in seen_sources:
+                seen_sources.add(abs_source)
+                unique_sources.append(abs_source)
+
+        logger.debug(f"Two-pass merge: {len(unique_sources)} unique source files")
 
         # Build the VBScript
         vbs_lines = [
@@ -202,8 +217,13 @@ class PptxService:
             'Const ppSaveAsOpenXMLPresentation = 24',
             'Const ppWindowMinimized = 2',
             '',
-            'Dim pptApp, targetPres, sourcePres, baseDesign',
-            'Dim fso, slideIndex, insertedSlide',
+            '\'Declare all variables at the top (VBScript requirement)',
+            'Dim pptApp, targetPres, sourcePres, clonedDesign',
+            'Dim fso, slideIndex, prevCount, newCount',
+            'Dim i, j, designName, slideDesignName, layoutIndex, layoutName',
+            'Dim importedDesigns, slideDesignMap, slideLayoutMap',
+            'Dim srcDesignName, destDesignIdx, designKey, newLayout',
+            'Dim blankSlideRemoved, firstSlideShapeCount, sectionResult',
             '',
             'On Error Resume Next',
             '',
@@ -222,65 +242,177 @@ class PptxService:
             '\'Create file system object for file existence checks',
             'Set fso = CreateObject("Scripting.FileSystemObject")',
             '',
+            '\'Create dictionaries to track cloned designs and slide-to-design/layout mappings',
+            'Set importedDesigns = CreateObject("Scripting.Dictionary")',
+            'Set slideDesignMap = CreateObject("Scripting.Dictionary")',
+            'Set slideLayoutMap = CreateObject("Scripting.Dictionary")',
+            '',
             '\'Create a new presentation as target',
             'Set targetPres = pptApp.Presentations.Add(True)',
-            '',
-            '\'Track where to insert next slide',
-            'slideIndex = 0',
             '',
             '\'Give PowerPoint time to initialize',
             'WScript.Sleep 500',
             '',
+            'WScript.Echo "Starting two-pass merge..."',
+            '',
+            '\'=== PASS 1: Clone all masters/designs from source files ===',
+            f'WScript.Echo "Pass 1: Cloning masters from {len(unique_sources)} unique source files"',
+            '',
         ]
 
-        # Add slide insertion commands for each source file
+        # Pass 1: Clone masters from each unique source file
+        for abs_source in unique_sources:
+            escaped_source = abs_source.replace("\\", "\\\\")
+            source_basename = os.path.basename(abs_source)
+
+            vbs_lines.append(f'\'Clone masters from: {source_basename}')
+            vbs_lines.append(f'WScript.Echo "  Opening: {source_basename}"')
+            vbs_lines.append(f'If fso.FileExists("{escaped_source}") Then')
+            vbs_lines.append(f'    On Error Resume Next')
+            vbs_lines.append(f'    Set sourcePres = pptApp.Presentations.Open("{escaped_source}", True, False, False)')
+            vbs_lines.append(f'    If Err.Number = 0 Then')
+            vbs_lines.append(f'        WScript.Echo "    Slides: " & sourcePres.Slides.Count & ", Designs: " & sourcePres.Designs.Count')
+            vbs_lines.append(f'        ')
+            vbs_lines.append(f'        \'Record which design and layout each slide uses')
+            vbs_lines.append(f'        For i = 1 To sourcePres.Slides.Count')
+            vbs_lines.append(f'            On Error Resume Next')
+            vbs_lines.append(f'            slideDesignName = sourcePres.Slides(i).Design.Name')
+            vbs_lines.append(f'            If Err.Number = 0 Then')
+            vbs_lines.append(f'                slideDesignMap.Add "{escaped_source}|" & i, slideDesignName')
+            vbs_lines.append(f'            End If')
+            vbs_lines.append(f'            Err.Clear')
+            vbs_lines.append(f'            \'Also record the CustomLayout index within the SlideMaster')
+            vbs_lines.append(f'            layoutName = sourcePres.Slides(i).CustomLayout.Name')
+            vbs_lines.append(f'            If Err.Number = 0 Then')
+            vbs_lines.append(f'                slideLayoutMap.Add "{escaped_source}|" & i, layoutName')
+            vbs_lines.append(f'            End If')
+            vbs_lines.append(f'            Err.Clear')
+            vbs_lines.append(f'            On Error GoTo 0')
+            vbs_lines.append(f'        Next')
+            vbs_lines.append(f'        ')
+            vbs_lines.append(f'        \'Clone each design from source to target using Designs.Clone')
+            vbs_lines.append(f'        For i = 1 To sourcePres.Designs.Count')
+            vbs_lines.append(f'            On Error Resume Next')
+            vbs_lines.append(f'            designName = sourcePres.Designs(i).Name')
+            vbs_lines.append(f'            \'Only clone if we haven\'t cloned this design from this source yet')
+            vbs_lines.append(f'            If Not importedDesigns.Exists("{escaped_source}|" & designName) Then')
+            vbs_lines.append(f'                WScript.Echo "    Cloning design: " & designName')
+            vbs_lines.append(f'                Set clonedDesign = targetPres.Designs.Clone(sourcePres.Designs(i))')
+            vbs_lines.append(f'                If Err.Number = 0 Then')
+            vbs_lines.append(f'                    \'Record the index of the cloned design')
+            vbs_lines.append(f'                    importedDesigns.Add "{escaped_source}|" & designName, clonedDesign.Index')
+            vbs_lines.append(f'                    WScript.Echo "      Cloned to index: " & clonedDesign.Index')
+            vbs_lines.append(f'                Else')
+            vbs_lines.append(f'                    WScript.Echo "      Clone error: " & Err.Description')
+            vbs_lines.append(f'                    Err.Clear')
+            vbs_lines.append(f'                End If')
+            vbs_lines.append(f'            End If')
+            vbs_lines.append(f'            Err.Clear')
+            vbs_lines.append(f'            On Error GoTo 0')
+            vbs_lines.append(f'        Next')
+            vbs_lines.append(f'        ')
+            vbs_lines.append(f'        sourcePres.Close')
+            vbs_lines.append(f'    Else')
+            vbs_lines.append(f'        WScript.Echo "    Error opening: " & Err.Description')
+            vbs_lines.append(f'        Err.Clear')
+            vbs_lines.append(f'    End If')
+            vbs_lines.append(f'    On Error GoTo 0')
+            vbs_lines.append(f'Else')
+            vbs_lines.append(f'    WScript.Echo "    File not found!"')
+            vbs_lines.append(f'End If')
+            vbs_lines.append(f'WScript.Sleep 200')
+            vbs_lines.append('')
+
+        vbs_lines.append('WScript.Echo "Cloned " & targetPres.Designs.Count & " designs total"')
+        vbs_lines.append('')
+        vbs_lines.append('\'=== PASS 2: Insert slides and assign to correct masters ===')
+        vbs_lines.append('WScript.Echo "Pass 2: Inserting slides..."')
+        vbs_lines.append('')
+        vbs_lines.append('\'Track where to insert next slide')
+        vbs_lines.append('slideIndex = 0')
+        vbs_lines.append('')
+
+        # Pass 2: Add slide insertion commands for each source file
         for source_path, slide_indices in slides_to_copy:
             if not os.path.exists(source_path):
                 continue
 
             abs_source = os.path.abspath(source_path).replace("/", "\\")
-
-            # Escape backslashes for VBScript string
             escaped_source = abs_source.replace("\\", "\\\\")
+            source_basename = os.path.basename(source_path)
 
-            vbs_lines.append(f'\'Insert slides from: {os.path.basename(source_path)}')
+            vbs_lines.append(f'\'Insert slides from: {source_basename}')
             vbs_lines.append(f'If fso.FileExists("{escaped_source}") Then')
 
             # For each slide index, use InsertFromFile
             for slide_idx in slide_indices:
                 # VBScript/PowerPoint uses 1-based indices
                 ppt_idx = slide_idx + 1
-                vbs_lines.append(f'    \'Insert slide {ppt_idx}')
+                vbs_lines.append(f'    \'Insert slide {ppt_idx} from {source_basename}')
+                vbs_lines.append(f'    prevCount = targetPres.Slides.Count')
                 vbs_lines.append(f'    On Error Resume Next')
                 # InsertFromFile(FileName, Index, SlideStart, SlideEnd)
-                # Index = where to insert (position after which to insert, 0 = at beginning)
-                # SlideStart/SlideEnd = which slides from source (1-based)
                 vbs_lines.append(f'    targetPres.Slides.InsertFromFile "{escaped_source}", slideIndex, {ppt_idx}, {ppt_idx}')
-                vbs_lines.append(f'    If Err.Number = 0 Then')
+                vbs_lines.append(f'    newCount = targetPres.Slides.Count')
+                vbs_lines.append(f'    If Err.Number <> 0 Then')
+                vbs_lines.append(f'        WScript.Echo "    Error inserting slide {ppt_idx} from {source_basename}: " & Err.Description')
+                vbs_lines.append(f'        Err.Clear')
+                vbs_lines.append(f'    ElseIf newCount > prevCount Then')
                 vbs_lines.append(f'        slideIndex = slideIndex + 1')
+                vbs_lines.append(f'        \'Assign the correct CustomLayout from the cloned design to the inserted slide')
+                vbs_lines.append(f'        designKey = "{escaped_source}|{ppt_idx}"')
+                vbs_lines.append(f'        If slideDesignMap.Exists(designKey) And slideLayoutMap.Exists(designKey) Then')
+                vbs_lines.append(f'            srcDesignName = slideDesignMap.Item(designKey)')
+                vbs_lines.append(f'            layoutName = slideLayoutMap.Item(designKey)')
+                vbs_lines.append(f'            designKey = "{escaped_source}|" & srcDesignName')
+                vbs_lines.append(f'            If importedDesigns.Exists(designKey) Then')
+                vbs_lines.append(f'                destDesignIdx = importedDesigns.Item(designKey)')
+                vbs_lines.append(f'                \'Find the matching CustomLayout by name in the cloned design')
+                vbs_lines.append(f'                Set newLayout = Nothing')
+                vbs_lines.append(f'                For j = 1 To targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts.Count')
+                vbs_lines.append(f'                    If targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts(j).Name = layoutName Then')
+                vbs_lines.append(f'                        Set newLayout = targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts(j)')
+                vbs_lines.append(f'                        Exit For')
+                vbs_lines.append(f'                    End If')
+                vbs_lines.append(f'                Next')
+                vbs_lines.append(f'                \'If found, apply the CustomLayout')
+                vbs_lines.append(f'                If Not newLayout Is Nothing Then')
+                vbs_lines.append(f'                    Set targetPres.Slides(slideIndex).CustomLayout = newLayout')
+                vbs_lines.append(f'                    If Err.Number <> 0 Then')
+                vbs_lines.append(f'                        WScript.Echo "    Warning: Could not assign layout to slide " & slideIndex & ": " & Err.Description')
+                vbs_lines.append(f'                        Err.Clear')
+                vbs_lines.append(f'                    End If')
+                vbs_lines.append(f'                End If')
+                vbs_lines.append(f'            End If')
+                vbs_lines.append(f'        End If')
+                vbs_lines.append(f'    Else')
+                vbs_lines.append(f'        WScript.Echo "    Warning: Slide {ppt_idx} from {source_basename} was not inserted"')
                 vbs_lines.append(f'    End If')
                 vbs_lines.append(f'    On Error GoTo 0')
-                vbs_lines.append(f'    WScript.Sleep 100')
                 vbs_lines.append(f'')
 
             vbs_lines.append('End If')
             vbs_lines.append('')
+
+        vbs_lines.append('WScript.Echo "Inserted " & targetPres.Slides.Count & " slides total"')
+        vbs_lines.append('')
 
         # Escape the output path
         escaped_output = abs_temp.replace("\\", "\\\\")
 
         # Add save and cleanup code
         vbs_lines.extend([
+            'WScript.Echo "Finalizing presentation..."',
+            '',
             '\'Remove the initial blank slide if we added slides',
-            'Dim blankSlideRemoved',
             'blankSlideRemoved = False',
             'If targetPres.Slides.Count > 1 Then',
             '    On Error Resume Next',
-            '    Dim firstSlideShapeCount',
             '    firstSlideShapeCount = targetPres.Slides(1).Shapes.Count',
             '    If firstSlideShapeCount = 0 Then',
             '        targetPres.Slides(1).Delete',
             '        blankSlideRemoved = True',
+            '        WScript.Echo "  Removed initial blank slide"',
             '    End If',
             '    On Error GoTo 0',
             'End If',
@@ -289,20 +421,34 @@ class PptxService:
 
         # Add sections if section_info is provided
         if section_info:
-            vbs_lines.append('\'Add sections to organize slides')
-            vbs_lines.append('On Error Resume Next')
+            logger.debug(f"Adding {len(section_info)} sections to VBScript")
             for section_name, start_idx, slide_count in section_info:
-                # Escape section name for VBScript
-                escaped_name = section_name.replace('"', '""')
+                logger.debug(f"  Section '{section_name}': start_idx={start_idx}, slide_count={slide_count}")
+
+            vbs_lines.append('\'Add sections to organize slides')
+            vbs_lines.append(f'WScript.Echo "Adding {len(section_info)} sections..."')
+            # Add sections in reverse order to avoid index shifting issues
+            for section_name, start_idx, slide_count in reversed(section_info):
+                # Escape section name for VBScript (escape quotes and handle special chars)
+                escaped_name = section_name.replace('"', '""').replace('\n', ' ').replace('\r', '')
                 # start_idx is 0-based, PowerPoint uses 1-based
-                # If blank slide was removed, we don't need to adjust since start_idx is relative to inserted slides
+                # If blank slide was NOT removed, we need to add 1 to the index
                 ppt_start_idx = start_idx + 1  # Convert to 1-based
-                vbs_lines.append(f'Dim sectionIdx_{start_idx}')
-                vbs_lines.append(f'sectionIdx_{start_idx} = {ppt_start_idx}')
-                vbs_lines.append(f'If Not blankSlideRemoved Then sectionIdx_{start_idx} = sectionIdx_{start_idx} + 1')
-                vbs_lines.append(f'targetPres.SectionProperties.AddSection sectionIdx_{start_idx}, "{escaped_name}"')
-            vbs_lines.append('On Error GoTo 0')
+                vbs_lines.append('On Error Resume Next')
+                # Use inline conditional for the index adjustment
+                vbs_lines.append(f'If blankSlideRemoved Then')
+                vbs_lines.append(f'    sectionResult = targetPres.SectionProperties.AddSection({ppt_start_idx}, "{escaped_name}")')
+                vbs_lines.append(f'Else')
+                vbs_lines.append(f'    sectionResult = targetPres.SectionProperties.AddSection({ppt_start_idx + 1}, "{escaped_name}")')
+                vbs_lines.append(f'End If')
+                vbs_lines.append('If Err.Number <> 0 Then')
+                vbs_lines.append(f'    WScript.Echo "  Section error for {escaped_name}: " & Err.Description')
+                vbs_lines.append('    Err.Clear')
+                vbs_lines.append('End If')
+                vbs_lines.append('On Error GoTo 0')
             vbs_lines.append('')
+        else:
+            logger.debug("No section_info provided, skipping section creation")
 
         vbs_lines.extend([
             '\'Save as PPTX',
@@ -329,6 +475,9 @@ class PptxService:
             f.write(vbs_content)
 
         try:
+            logger.info(f"Executing VBScript merge with {len(slides_to_copy)} slide sources")
+            logger.debug(f"VBScript saved to: {vbs_path}")
+
             # Execute the VBScript using cscript (console mode for better error handling)
             result = subprocess.run(
                 ['cscript', '//Nologo', vbs_path],
@@ -336,6 +485,16 @@ class PptxService:
                 text=True,
                 timeout=300  # 5 minute timeout
             )
+
+            # Log VBScript output for debugging
+            if result.stdout:
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        logger.debug(f"VBS: {line.strip()}")
+            if result.stderr:
+                for line in result.stderr.strip().split('\n'):
+                    if line.strip():
+                        logger.warning(f"VBS stderr: {line.strip()}")
 
             # Check for success
             if result.returncode != 0:
@@ -349,6 +508,7 @@ class PptxService:
             if not os.path.exists(temp_path):
                 raise RuntimeError("VBScript completed but output file was not created")
 
+            logger.info(f"VBScript merge completed successfully: {temp_path}")
             return temp_path
 
         finally:
@@ -1226,6 +1386,7 @@ class PptxService:
             # Record section info if it has slides
             if section_slide_count > 0:
                 section_info.append((section.name, section_start, section_slide_count))
+                logger.debug(f"merge_liturgy_v2: Added section '{section.name}' at index {section_start} with {section_slide_count} slides")
                 current_slide_idx += section_slide_count
 
         if not slides_to_copy:

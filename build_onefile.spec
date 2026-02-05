@@ -1,31 +1,48 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec file for single-file executable."""
 
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
 block_cipher = None
 
-# Collect all data files
+# Collect all data files including PyQt6 plugins
 datas = [
     ('src/i18n/*.json', 'src/i18n'),  # Translation files
-]
+] + collect_data_files('PyQt6', include_py_files=False)
+
+# Collect all PyQt6 submodules to ensure nothing is missed
+pyqt6_submodules = collect_submodules('PyQt6')
 
 # Hidden imports that PyInstaller might miss
-hiddenimports = [
+hiddenimports = pyqt6_submodules + [
+    # PyQt6 core modules (explicit for safety)
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
+    'PyQt6.QtPrintSupport',
     'PyQt6.sip',
+    # python-pptx
     'pptx',
     'pptx.util',
     'pptx.enum.text',
     'pptx.enum.shapes',
     'pptx.enum.dml',
+    'pptx.oxml',
+    'pptx.oxml.ns',
+    # lxml
     'lxml',
     'lxml._elementpath',
     'lxml.etree',
+    # Excel
     'openpyxl',
+    'openpyxl.cell',
+    'openpyxl.workbook',
+    # Windows COM
     'win32com',
     'win32com.client',
     'pythoncom',
+    'pywintypes',
+    # Other
     'yt_dlp',
     'requests',
     'PIL',

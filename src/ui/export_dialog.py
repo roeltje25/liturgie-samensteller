@@ -26,6 +26,9 @@ from PyQt6.QtCore import QUrl
 from ..models import Liturgy, Settings
 from ..services import ExportService
 from ..i18n import tr
+from ..logging_config import get_logger
+
+logger = get_logger("export_dialog")
 
 
 class ExportWorker(QThread):
@@ -220,10 +223,16 @@ class ExportDialog(QDialog):
             filename = self.export_service.get_default_filename("")
 
         # Check Excel export requirements
+        logger.debug(f"Excel checkbox checked: {self.excel_checkbox.isChecked()}")
+        logger.debug(f"Excel path: {self._excel_path}")
+        logger.debug(f"Liturgy service_date: {self.liturgy.service_date}")
+        logger.debug(f"Liturgy dienstleider: {self.liturgy.dienstleider}")
+
         export_excel = self.excel_checkbox.isChecked() and self._excel_path
         if export_excel:
             # Check if service_date is set
             if not self.liturgy.service_date:
+                logger.warning("Excel export skipped: no service_date set")
                 QMessageBox.warning(
                     self,
                     tr("dialog.export.title"),
@@ -240,7 +249,10 @@ class ExportDialog(QDialog):
                     QMessageBox.StandardButton.No
                 )
                 if reply != QMessageBox.StandardButton.Yes:
+                    logger.debug("Excel export skipped: user declined without dienstleider")
                     export_excel = False
+
+        logger.debug(f"Final export_excel decision: {export_excel}")
 
         # Show progress
         self.progress_label.setVisible(True)

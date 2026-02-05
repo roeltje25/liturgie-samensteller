@@ -659,6 +659,7 @@ class Liturgy:
 
         elif isinstance(item, OfferingLiturgyItem):
             # Offering becomes a regular section with one slide
+            logger.debug(f"Converting offering item to section: pptx_path={item.pptx_path!r}, slide_index={item.slide_index}")
             section = LiturgySection(
                 name=item.slide_title or item.title,
                 section_type=SectionType.REGULAR,
@@ -671,6 +672,7 @@ class Liturgy:
                 is_stub=item.is_stub,
             )
             section.slides.append(slide)
+            logger.debug(f"Created slide with source_path={slide.source_path!r}")
 
         else:
             # Generic item becomes a regular section
@@ -696,6 +698,7 @@ class Liturgy:
         If base_path is provided, paths are saved relative to it.
         """
         logger.info(f"Saving liturgy to: {path}")
+        logger.debug(f"Save base_path: {base_path!r}")
         data = self.to_dict()
 
         if base_path:
@@ -720,6 +723,7 @@ class Liturgy:
         If base_path is provided, relative paths are resolved to absolute.
         """
         logger.info(f"Loading liturgy from: {path}")
+        logger.debug(f"Load base_path: {base_path!r}")
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -729,6 +733,11 @@ class Liturgy:
         except Exception as e:
             logger.error(f"Failed to load liturgy from {path}: {e}", exc_info=True)
             raise
+
+        # Log the saved base path for debugging
+        saved_base = data.get("_saved_base_path")
+        if saved_base:
+            logger.debug(f"Liturgy was saved with base_path: {saved_base!r}")
 
         if base_path:
             cls._convert_paths_in_dict(data, base_path, to_relative=False)
@@ -773,6 +782,7 @@ class Liturgy:
         def convert_path(p: Optional[str]) -> Optional[str]:
             if not p:
                 return p
+            original = p
             if to_relative:
                 # Convert absolute to relative
                 if os.path.isabs(p):
@@ -783,14 +793,18 @@ class Liturgy:
                         too_many_parents = ".." + os.sep + ".." + os.sep + ".."
                         if not rel.startswith(too_many_parents):
                             # Normalize to forward slashes for cross-platform compatibility
-                            return rel.replace(os.sep, "/")
+                            result = rel.replace(os.sep, "/")
+                            logger.debug(f"Path conversion (to_relative): {original!r} -> {result!r} (base: {base_path!r})")
+                            return result
                     except ValueError:
                         pass  # Different drives on Windows
                 return p
             else:
                 # Convert relative to absolute
                 if not os.path.isabs(p):
-                    return os.path.normpath(os.path.join(base_path, p))
+                    result = os.path.normpath(os.path.join(base_path, p))
+                    logger.debug(f"Path conversion (to_absolute): {original!r} -> {result!r} (base: {base_path!r}), exists={os.path.exists(result)}")
+                    return result
                 return p
 
         # Convert top-level path fields

@@ -72,11 +72,12 @@ pause
 exit /b 0
 
 :nuitka_build
-REM Install/upgrade Nuitka dependencies
+REM Install/upgrade Nuitka and project dependencies
 echo.
-echo Installing Nuitka dependencies...
+echo Installing Nuitka and project dependencies...
 echo Note: First build may take longer as Nuitka downloads C compiler if needed.
 pip install --upgrade nuitka pywin32 ordered-set zstandard
+pip install -r requirements.txt
 
 REM Get version from Python
 for /f "tokens=*" %%i in ('python -c "from src import __version__; print(__version__)"') do set APP_VERSION=%%i
@@ -92,22 +93,20 @@ python -m nuitka ^
     --windows-console-mode=disable ^
     --enable-plugin=pyqt6 ^
     --include-data-dir=src/i18n=src/i18n ^
-    --include-module=pptx ^
-    --include-module=pptx.util ^
-    --include-module=pptx.enum.text ^
-    --include-module=pptx.enum.shapes ^
-    --include-module=pptx.enum.dml ^
-    --include-module=lxml ^
-    --include-module=lxml._elementpath ^
-    --include-module=lxml.etree ^
-    --include-module=openpyxl ^
-    --include-module=win32com ^
-    --include-module=win32com.client ^
+    --include-package=pptx ^
+    --include-package-data=pptx ^
+    --include-package=lxml ^
+    --include-package=openpyxl ^
+    --include-package=win32com ^
     --include-module=pythoncom ^
-    --include-module=yt_dlp ^
-    --include-module=requests ^
-    --include-module=PIL ^
-    --include-module=PIL.Image ^
+    --include-module=pywintypes ^
+    --include-package=yt_dlp ^
+    --include-package=requests ^
+    --include-package=PIL ^
+    --include-package=certifi ^
+    --include-package=charset_normalizer ^
+    --include-package=urllib3 ^
+    --include-package=idna ^
     --nofollow-import-to=tkinter ^
     --nofollow-import-to=matplotlib ^
     --nofollow-import-to=numpy ^
@@ -121,6 +120,7 @@ python -m nuitka ^
     --file-version=%APP_VERSION% ^
     --product-version=%APP_VERSION% ^
     --assume-yes-for-downloads ^
+    --msvc=latest ^
     run.py
 
 if errorlevel 1 (

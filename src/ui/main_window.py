@@ -41,6 +41,9 @@ from ..models import (
 )
 from ..services import FolderScanner, ExportService, YouTubeService, ThemeService, PptxService
 from ..i18n import tr, set_language, get_language, on_language_changed
+from ..logging_config import get_logger
+
+logger = get_logger("main_window")
 
 from .liturgy_list import LiturgyListWidget
 from .liturgy_tree import LiturgyTreeWidget
@@ -136,6 +139,7 @@ class MainWindow(QMainWindow):
         self.service_date_edit.setDate(QDate(next_sunday.year, next_sunday.month, next_sunday.day))
         # Also set liturgy service_date (signal not connected yet during init)
         self.liturgy.service_date = next_sunday.strftime("%Y-%m-%d")
+        logger.debug(f"_set_next_sunday: Set service_date to {self.liturgy.service_date}")
 
     def _setup_dienstleider_autocomplete(self) -> None:
         """Setup autocomplete for dienstleider field from Excel."""
@@ -480,6 +484,37 @@ class MainWindow(QMainWindow):
         self.settings.language = lang
         self.settings.save()
 
+    def _get_insertion_index(self) -> int:
+        """Get the index where new sections should be inserted based on current selection.
+
+        Returns the index to insert at (after the selected section), or -1 for end.
+        """
+        selected_idx = self.liturgy_tree.get_selected_section_index()
+        if selected_idx >= 0:
+            return selected_idx + 1  # Insert after selected section
+        return -1  # No selection, add at end
+
+    def _insert_section_at_cursor(self, section: LiturgySection) -> int:
+        """Insert a section at the cursor position (after selected section).
+
+        Returns the index where the section was inserted.
+        """
+        insert_idx = self._get_insertion_index()
+        if insert_idx >= 0:
+            self.liturgy.insert_section(insert_idx, section)
+            return insert_idx
+        else:
+            self.liturgy.add_section(section)
+            return len(self.liturgy.sections) - 1
+
+    def _insert_item_at_cursor(self, item) -> int:
+        """Insert an item (converted to section) at the cursor position.
+
+        Returns the index where the section was inserted.
+        """
+        section = Liturgy._item_to_section(item)
+        return self._insert_section_at_cursor(section)
+
     def _on_add_song(self) -> None:
         """Add a song to the liturgy."""
         songs = self.folder_scanner.scan_songs()
@@ -488,8 +523,9 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             item = dialog.get_selected_item()
             if item:
-                self.liturgy.add_item(item)
+                new_idx = self._insert_item_at_cursor(item)
                 self.liturgy_tree.set_liturgy(self.liturgy)
+                self.liturgy_tree.select_section(new_idx)
                 self.unsaved_changes = True
                 # YouTube search is now manual - user can use Edit button or double-click
 
@@ -523,8 +559,9 @@ class MainWindow(QMainWindow):
                     is_stub=False,
                 )
 
-                self.liturgy.add_item(item)
+                new_idx = self._insert_item_at_cursor(item)
                 self.liturgy_tree.set_liturgy(self.liturgy)
+                self.liturgy_tree.select_section(new_idx)
                 self.unsaved_changes = True
 
                 # Refresh folder scanner cache
@@ -555,16 +592,21 @@ class MainWindow(QMainWindow):
                                 is_stub=False,
                             )
                             section.slides.append(slide)
-                        self.liturgy.add_section(section)
+                        new_idx = self._insert_section_at_cursor(section)
                     else:
-                        self.liturgy.add_item(item)
+                        new_idx = self._insert_item_at_cursor(item)
                 else:
-                    self.liturgy.add_item(item)
+                    new_idx = self._insert_item_at_cursor(item)
                 self.liturgy_tree.set_liturgy(self.liturgy)
+                self.liturgy_tree.select_section(new_idx)
                 self.unsaved_changes = True
 
     def _on_add_offering(self) -> None:
         """Add an offering item to the liturgy."""
+        # Debug: log paths for diagnostics
+        collecte_path = self.settings.get_collecte_path(self.base_path)
+        logger.debug(f"Adding offering: base_path={self.base_path!r}, collecte_path={collecte_path!r}, exists={os.path.exists(collecte_path)}")
+
         slides = self.folder_scanner.get_offering_slides()
         if not slides:
             QMessageBox.warning(
@@ -579,8 +621,17 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             item = dialog.get_selected_item()
             if item:
-                self.liturgy.add_item(item)
+                logger.debug(f"Offering item created: pptx_path={item.pptx_path!r}")
+                new_idx = self._insert_item_at_cursor(item)
+
+                # Debug: verify the slide source_path after conversion
+                if new_idx < len(self.liturgy.sections):
+                    section = self.liturgy.sections[new_idx]
+                    for slide in section.slides:
+                        logger.debug(f"After insert: slide.source_path={slide.source_path!r}, exists={os.path.exists(slide.source_path) if slide.source_path else False}")
+
                 self.liturgy_tree.set_liturgy(self.liturgy)
+                self.liturgy_tree.select_section(new_idx)
                 self.unsaved_changes = True
 
     def _on_add_from_theme(self) -> None:
@@ -588,9 +639,20 @@ class MainWindow(QMainWindow):
         dialog = ThemeSectionPicker(self.settings, self.base_path, self.liturgy.sections, self)
         if dialog.exec():
             sections = dialog.get_selected_sections()
-            for section in sections:
-                self.liturgy.add_section(section)
+            insert_idx = self._get_insertion_index()
+            first_idx = -1
+            for i, section in enumerate(sections):
+                if insert_idx >= 0:
+                    self.liturgy.insert_section(insert_idx + i, section)
+                    if first_idx < 0:
+                        first_idx = insert_idx
+                else:
+                    self.liturgy.add_section(section)
+                    if first_idx < 0:
+                        first_idx = len(self.liturgy.sections) - 1
             self.liturgy_tree.set_liturgy(self.liturgy)
+            if first_idx >= 0:
+                self.liturgy_tree.select_section(first_idx)
             self.unsaved_changes = True
 
     def _on_add_empty_section(self) -> None:
@@ -603,18 +665,7 @@ class MainWindow(QMainWindow):
         )
         if ok and name.strip():
             section = LiturgySection(name=name.strip(), section_type=SectionType.REGULAR)
-
-            # Get selected section index to insert after it
-            selected_idx = self.liturgy_tree.get_selected_section_index()
-            if selected_idx >= 0:
-                # Insert after the selected section
-                self.liturgy.insert_section(selected_idx + 1, section)
-                new_idx = selected_idx + 1
-            else:
-                # No selection, add at the end
-                self.liturgy.add_section(section)
-                new_idx = len(self.liturgy.sections) - 1
-
+            new_idx = self._insert_section_at_cursor(section)
             self.liturgy_tree.set_liturgy(self.liturgy)
             self.liturgy_tree.select_section(new_idx)
             self.unsaved_changes = True
@@ -673,15 +724,7 @@ class MainWindow(QMainWindow):
             )
             section.slides.append(slide)
 
-        # Insert at selected position or at end
-        selected_idx = self.liturgy_tree.get_selected_section_index()
-        if selected_idx >= 0:
-            self.liturgy.insert_section(selected_idx + 1, section)
-            new_idx = selected_idx + 1
-        else:
-            self.liturgy.add_section(section)
-            new_idx = len(self.liturgy.sections) - 1
-
+        new_idx = self._insert_section_at_cursor(section)
         self.liturgy_tree.set_liturgy(self.liturgy)
         self.liturgy_tree.select_section(new_idx)
         self.unsaved_changes = True
@@ -858,6 +901,8 @@ class MainWindow(QMainWindow):
 
     def _sync_service_info_from_liturgy(self) -> None:
         """Sync service info panel from liturgy values."""
+        logger.debug(f"Syncing service info: service_date={self.liturgy.service_date}, dienstleider={self.liturgy.dienstleider}")
+
         # Block signals to avoid triggering unsaved_changes
         self.service_date_edit.blockSignals(True)
         self.dienstleider_edit.blockSignals(True)
@@ -866,13 +911,19 @@ class MainWindow(QMainWindow):
             qdate = QDate.fromString(self.liturgy.service_date, "yyyy-MM-dd")
             if qdate.isValid():
                 self.service_date_edit.setDate(qdate)
+                logger.debug(f"Set service_date from liturgy: {self.liturgy.service_date}")
+            else:
+                logger.warning(f"Invalid service_date format: {self.liturgy.service_date}")
+                self._set_next_sunday()
         else:
+            logger.debug("No service_date in liturgy, setting to next Sunday")
             self._set_next_sunday()
 
         self.dienstleider_edit.setText(self.liturgy.dienstleider or "")
 
         self.service_date_edit.blockSignals(False)
         self.dienstleider_edit.blockSignals(False)
+        logger.debug(f"After sync: liturgy.service_date={self.liturgy.service_date}")
 
     def _on_new(self) -> None:
         """Create new liturgy."""
@@ -965,6 +1016,8 @@ class MainWindow(QMainWindow):
 
     def _on_export(self) -> None:
         """Export liturgy to output files."""
+        logger.debug(f"_on_export: liturgy.service_date={self.liturgy.service_date}, liturgy.dienstleider={self.liturgy.dienstleider}")
+
         # Check for unfilled fields
         unfilled_slides = self.liturgy_tree.get_slides_with_unfilled_fields()
         if unfilled_slides:

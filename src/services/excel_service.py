@@ -253,11 +253,18 @@ class ExcelService:
         return columns
 
     def _get_song_titles(self, liturgy: Liturgy) -> List[str]:
-        """Extract song titles from liturgy."""
+        """Extract individual song titles from liturgy.
+
+        A SONG section may contain multiple songs as slides. Each slide
+        within a SONG section is a song leaf node with the correct title.
+        """
         titles = []
         for section in liturgy.sections:
-            if section.section_type == SectionType.SONG and section.name:
-                titles.append(section.name)
+            if section.section_type != SectionType.SONG:
+                continue
+            for slide in section.slides:
+                if slide.title:
+                    titles.append(slide.title)
         return titles
 
     def _find_liturgy_row(

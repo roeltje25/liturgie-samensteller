@@ -24,6 +24,9 @@ from PyQt6.QtGui import QPixmap
 from ..models import OfferingSlide, OfferingLiturgyItem, Settings
 from ..services import PptxService, FolderScanner
 from ..i18n import tr
+from ..logging_config import get_logger
+
+logger = get_logger("offering_picker")
 
 
 class ThumbnailSignals(QObject):
@@ -365,6 +368,8 @@ class OfferingPickerDialog(QDialog):
         if self._selected_slide:
             # Always provide actual path (custom or default offering file)
             actual_pptx_path = self._custom_pptx_path or self.settings.get_collecte_path(self.base_path)
+            import os
+            logger.debug(f"Creating offering item: pptx_path={actual_pptx_path!r}, exists={os.path.exists(actual_pptx_path) if actual_pptx_path else False}")
             return OfferingLiturgyItem(
                 title=tr("item.offering"),
                 slide_index=self._selected_slide.index,

@@ -112,7 +112,7 @@ class ExportDialog(QDialog):
         # Filename input
         filename_layout = QFormLayout()
         self.filename_input = QLineEdit()
-        self.filename_input.setText(self.export_service.get_default_filename(""))
+        self.filename_input.setText(self.export_service.get_default_filename("", service_date=self.liturgy.service_date))
         filename_layout.addRow(tr("dialog.export.filename"), self.filename_input)
         layout.addLayout(filename_layout)
 
@@ -207,7 +207,7 @@ class ExportDialog(QDialog):
         return None
 
     def _update_export_button(self) -> None:
-        """Update export button enabled state."""
+        """Update export button and open-after checkbox state."""
         any_selected = (
             self.pptx_checkbox.isChecked() or
             self.pdf_checkbox.isChecked() or
@@ -215,6 +215,13 @@ class ExportDialog(QDialog):
             self.excel_checkbox.isChecked()
         )
         self.export_button.setEnabled(any_selected)
+
+        # "Open after export" only makes sense when PPTX is exported
+        if not self.pptx_checkbox.isChecked():
+            self.open_after_checkbox.setChecked(False)
+            self.open_after_checkbox.setEnabled(False)
+        else:
+            self.open_after_checkbox.setEnabled(True)
 
     def _on_export(self) -> None:
         """Start the export process."""

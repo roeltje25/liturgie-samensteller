@@ -18,16 +18,25 @@ class ExportService:
         self.base_path = base_path
         self.pptx_service = PptxService(settings, base_path)
 
-    def get_default_filename(self, extension: str = ".pptx") -> str:
-        """Generate default filename based on pattern."""
+    def get_default_filename(self, extension: str = ".pptx", service_date: Optional[str] = None) -> str:
+        """Generate default filename based on pattern.
+
+        Args:
+            extension: File extension to use.
+            service_date: ISO date string (YYYY-MM-DD) for the filename. Falls back to today.
+        """
         pattern = self.settings.output_pattern
-        today = date.today()
+
+        if service_date:
+            d = date.fromisoformat(service_date)
+        else:
+            d = date.today()
 
         filename = pattern.format(
-            date=today.strftime("%Y%m%d"),
-            year=today.strftime("%Y"),
-            month=today.strftime("%m"),
-            day=today.strftime("%d"),
+            date=d.strftime("%Y%m%d"),
+            year=d.strftime("%Y"),
+            month=d.strftime("%m"),
+            day=d.strftime("%d"),
         )
 
         # Ensure correct extension

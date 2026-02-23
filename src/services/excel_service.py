@@ -180,6 +180,141 @@ class ExcelService:
 
         return self.excel_path
 
+    def import_service_songs(
+        self,
+        service_date: date,
+        song_titles: List[str],
+        dienstleider: str = "",
+    ) -> str:
+        """Import songs from a scanned PPTX into the Excel register.
+
+        Behaves like :meth:`export_liturgy` but accepts plain Python values
+        instead of a :class:`Liturgy` object, making it suitable for batch
+        imports from existing presentations.
+
+        Args:
+            service_date: The date of the service.
+            song_titles: Ordered list of song title strings.
+            dienstleider: Optional service leader name.
+
+        Returns:
+            Path to the updated Excel file.
+
+        Raises:
+            FileNotFoundError: If the Excel file doesn't exist.
+        """
+        if not os.path.exists(self.excel_path):
+            raise FileNotFoundError(f"Excel file not found: {self.excel_path}")
+
+        # First pass (data_only) to locate the target row by date
+        target_row = None
+        liturgy_sheet_name = None
+        songs_sheet_name = None
+
+        wb_readonly = load_workbook(self.excel_path, data_only=True)
+        try:
+            liturgy_sheet_name = self._find_sheet_name(wb_readonly, self.LITURGY_SHEET)
+            songs_sheet_name = self._find_sheet_name(wb_readonly, self.SONGS_SHEET)
+            if liturgy_sheet_name:
+                ws_readonly = wb_readonly[liturgy_sheet_name]
+                col_map = self._get_column_map(ws_readonly)
+                date_col = col_map.get(self.COL_ZONDAG, 1)
+                target_row = self._find_liturgy_row(ws_readonly, service_date, date_col)
+        finally:
+            wb_readonly.close()
+
+        # Second pass – editing
+        wb = load_workbook(self.excel_path)
+        try:
+            if liturgy_sheet_name and liturgy_sheet_name in wb.sheetnames:
+                ws_liturgy = wb[liturgy_sheet_name]
+                col_map = self._get_column_map(ws_liturgy)
+                date_col = col_map.get(self.COL_ZONDAG, 1)
+                dienstleider_col = col_map.get(self.COL_DIENSTLEIDER)
+                bekend_col = col_map.get(self.COL_LITURGIE_BEKEND)
+                lied_cols = [
+                    col_map[f"lied{i}"]
+                    for i in range(1, 13)
+                    if f"lied{i}" in col_map
+                ]
+
+                if target_row is None:
+                    # Append a new row
+                    target_row = 2
+                    for row in range(2, ws_liturgy.max_row + 1):
+                        if ws_liturgy.cell(row=row, column=date_col).value is not None:
+                            target_row = row + 1
+                    ws_liturgy.cell(row=target_row, column=date_col).value = service_date
+
+                if dienstleider_col and dienstleider:
+                    ws_liturgy.cell(row=target_row, column=dienstleider_col).value = dienstleider
+                if bekend_col:
+                    ws_liturgy.cell(row=target_row, column=bekend_col).value = "ja"
+                for i, lied_col in enumerate(lied_cols):
+                    ws_liturgy.cell(row=target_row, column=lied_col).value = (
+                        song_titles[i] if i < len(song_titles) else None
+                    )
+
+            if songs_sheet_name and songs_sheet_name in wb.sheetnames:
+                ws_songs = wb[songs_sheet_name]
+                current_year = service_date.year
+                self._create_year_named_range(wb, current_year)
+                self._ensure_year_column_exists(ws_songs, wb)
+                for title in song_titles:
+                    self._ensure_song_exists(ws_songs, title)
+
+            temp_fd, temp_path = tempfile.mkstemp(suffix=".xlsx")
+            os.close(temp_fd)
+            try:
+                wb.save(temp_path)
+                wb.close()
+                wb = None
+                shutil.move(temp_path, self.excel_path)
+            except Exception:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise
+        finally:
+            if wb:
+                wb.close()
+
+        return self.excel_path
+
+    def get_registered_songs(self) -> set:
+        """Return normalized lower-case song titles from the Liederen sheet (read-only)."""
+        if not os.path.exists(self.excel_path):
+            return set()
+        try:
+            wb = load_workbook(self.excel_path, data_only=True, read_only=True)
+            songs_sheet_name = self._find_sheet_name(wb, self.SONGS_SHEET)
+            if not songs_sheet_name:
+                wb.close()
+                return set()
+            ws = wb[songs_sheet_name]
+
+            # Read header row to locate the song title column
+            lied_col = 1
+            header_row = next(ws.iter_rows(max_row=1, values_only=True), None)
+            if header_row:
+                for i, val in enumerate(header_row):
+                    if val and str(val).strip().lower() in (
+                        self.COL_LIED, "titel", "naam", "song"
+                    ):
+                        lied_col = i + 1
+                        break
+
+            result: set = set()
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if lied_col - 1 < len(row):
+                    val = row[lied_col - 1]
+                    if val and isinstance(val, str):
+                        result.add(val.strip().lower())
+            wb.close()
+            return result
+        except Exception as exc:
+            logger.warning("Could not read registered songs: %s", exc)
+            return set()
+
     def get_dienstleiders(self) -> List[str]:
         """Get list of unique Dienstleiders for autocomplete.
 

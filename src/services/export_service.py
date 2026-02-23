@@ -63,7 +63,12 @@ class ExportService:
         # Merge all slides (returns path to temp file)
         # Use v2 merge if liturgy has sections, v1 merge for legacy items
         if liturgy.sections:
-            temp_path = self.pptx_service.merge_liturgy_v2(liturgy)
+            song_cover_path = self.settings.get_song_cover_path(self.base_path)
+            temp_path = self.pptx_service.merge_liturgy_v2(
+                liturgy,
+                song_cover_enabled=self.settings.song_cover_enabled,
+                song_cover_path=song_cover_path,
+            )
         else:
             temp_path = self.pptx_service.merge_liturgy(liturgy)
 
@@ -111,17 +116,8 @@ class ExportService:
 
         return output_path
 
-    def export_links_txt(self, liturgy: Liturgy, filename: Optional[str] = None) -> str:
-        """
-        Export liturgy with YouTube links to a text file.
-        Returns the path to the created file.
-        """
-        if filename is None:
-            filename = self.get_default_filename(".txt")
-
-        output_folder = self.get_output_folder()
-        output_path = os.path.join(output_folder, filename)
-
+    def generate_links_text(self, liturgy: Liturgy) -> str:
+        """Generate liturgy links text content without writing to file."""
         lines = []
         lines.append(f"Liturgie: {liturgy.name}")
         lines.append(f"Datum: {liturgy.created_date}")
@@ -145,8 +141,21 @@ class ExportService:
 
             lines.append("")
 
+        return "\n".join(lines)
+
+    def export_links_txt(self, liturgy: Liturgy, filename: Optional[str] = None) -> str:
+        """
+        Export liturgy with YouTube links to a text file.
+        Returns the path to the created file.
+        """
+        if filename is None:
+            filename = self.get_default_filename(".txt")
+
+        output_folder = self.get_output_folder()
+        output_path = os.path.join(output_folder, filename)
+
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
+            f.write(self.generate_links_text(liturgy))
 
         return output_path
 

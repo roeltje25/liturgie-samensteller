@@ -203,6 +203,11 @@ class MainWindow(QMainWindow):
         self.btn_edit_fields.setMinimumHeight(40)
         add_layout.addWidget(self.btn_edit_fields)
 
+        # Share button
+        self.btn_share = QPushButton()
+        self.btn_share.setMinimumHeight(40)
+        add_layout.addWidget(self.btn_share)
+
         add_layout.addStretch()
 
         left_layout.addWidget(self.add_items_group)
@@ -313,6 +318,8 @@ class MainWindow(QMainWindow):
         self.action_check_links = self.tools_menu.addAction("")
         self.action_edit_fields = self.tools_menu.addAction("")
         self.tools_menu.addSeparator()
+        self.action_import_pptx = self.tools_menu.addAction("")
+        self.tools_menu.addSeparator()
         self.action_settings = self.tools_menu.addAction("")
 
         # Spacer for right-aligned language selector
@@ -357,6 +364,7 @@ class MainWindow(QMainWindow):
         self.btn_add_section.clicked.connect(self._on_add_empty_section)
         self.btn_add_pptx.clicked.connect(self._on_add_pptx)
         self.btn_edit_fields.clicked.connect(self._on_edit_fields)
+        self.btn_share.clicked.connect(self._on_share)
         self.btn_delete.clicked.connect(self._on_delete)
         self.btn_edit.clicked.connect(self._on_edit)
 
@@ -374,6 +382,7 @@ class MainWindow(QMainWindow):
 
         self.action_check_links.triggered.connect(self._on_check_links)
         self.action_edit_fields.triggered.connect(self._on_edit_fields)
+        self.action_import_pptx.triggered.connect(self._on_import_pptx)
         self.action_settings.triggered.connect(self._on_settings)
 
         self.action_open_theme.triggered.connect(self._on_open_theme)
@@ -423,6 +432,7 @@ class MainWindow(QMainWindow):
         self.tools_menu.setTitle(tr("menu.tools"))
         self.action_check_links.setText(tr("menu.tools.check_links"))
         self.action_edit_fields.setText(tr("menu.tools.edit_fields"))
+        self.action_import_pptx.setText(tr("menu.tools.import_pptx"))
         self.action_settings.setText(tr("menu.tools.settings"))
 
         self.help_menu.setTitle(tr("menu.help"))
@@ -449,6 +459,7 @@ class MainWindow(QMainWindow):
         self.btn_add_section.setText(tr("button.add_section"))
         self.btn_add_pptx.setText(tr("button.add_pptx"))
         self.btn_edit_fields.setText(tr("button.edit_fields"))
+        self.btn_share.setText("\U0001F4E4 " + tr("button.share"))
         self.btn_delete.setText(tr("button.delete"))
         self.btn_edit.setText(tr("button.edit"))
 
@@ -1080,6 +1091,12 @@ class MainWindow(QMainWindow):
             if invalid_count > 0:
                 self.status_label.setText(tr("status.links_invalid", count=invalid_count))
 
+    def _on_import_pptx(self) -> None:
+        """Open the Import from PPTX archive dialog."""
+        from .import_pptx_dialog import ImportPptxDialog
+        dialog = ImportPptxDialog(self.settings, self.base_path, self)
+        dialog.exec()
+
     def _on_settings(self) -> None:
         """Open settings dialog."""
         dialog = SettingsDialog(self.settings, self.base_path, self)
@@ -1165,6 +1182,21 @@ class MainWindow(QMainWindow):
             self.liturgy = dialog.get_updated_liturgy()
             self.liturgy_tree.set_liturgy(self.liturgy)
             self.unsaved_changes = True
+
+    def _on_share(self) -> None:
+        """Share liturgy links text via Windows Share dialog."""
+        from ..services.share_service import share_text
+        from PyQt6.QtWidgets import QApplication
+
+        text = self.export_service.generate_links_text(self.liturgy)
+        title = self.liturgy.name or "Liturgie"
+        hwnd = int(self.winId())
+
+        if share_text(text, title, hwnd):
+            self.status_label.setText(tr("status.shared"))
+        else:
+            QApplication.clipboard().setText(text)
+            self.status_label.setText(tr("status.share_clipboard"))
 
     def _on_shortcuts(self) -> None:
         """Show keyboard shortcuts dialog."""

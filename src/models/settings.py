@@ -68,8 +68,15 @@ class Settings:
     output_pattern: str = "{date}_viering-generated.pptx"
     language: str = "nl"
 
+    # Song cover slide
+    song_cover_enabled: bool = False
+    song_cover_filename: str = ""
+
     # Excel registration
     excel_register_path: str = "./LiederenRegister.xlsx"
+
+    # Folder containing existing PPTX presentations to scan for songs
+    pptx_archive_folder: str = "./Vieringen"
 
     # Window state
     window_width: int = 1200
@@ -162,6 +169,16 @@ class Settings:
         algemeen = self.get_algemeen_path(base_path)
         return os.path.join(algemeen, self.collecte_filename)
 
+    def get_song_cover_path(self, base_path: str = ".") -> Optional[str]:
+        """Get absolute path to song cover slide PPTX if enabled and file exists."""
+        if not self.song_cover_enabled or not self.song_cover_filename:
+            return None
+        algemeen = self.get_algemeen_path(base_path)
+        path = os.path.join(algemeen, self.song_cover_filename)
+        if os.path.exists(path):
+            return path
+        return None
+
     def get_stub_template_path(self, base_path: str = ".") -> Optional[str]:
         """Get absolute path to stub template if it exists."""
         algemeen = self.get_algemeen_path(base_path)
@@ -175,6 +192,14 @@ class Settings:
         if os.path.isabs(self.themes_folder):
             return self.themes_folder
         return os.path.normpath(os.path.join(self._resolve_base(base_path), self.themes_folder))
+
+    def get_pptx_archive_path(self, base_path: str = ".") -> str:
+        """Get absolute path to the PPTX archive folder."""
+        if os.path.isabs(self.pptx_archive_folder):
+            return self.pptx_archive_folder
+        return os.path.normpath(
+            os.path.join(self._resolve_base(base_path), self.pptx_archive_folder)
+        )
 
     def get_excel_register_path(self, base_path: str = ".") -> Optional[str]:
         """Get absolute path to Excel register file, or None if not set."""

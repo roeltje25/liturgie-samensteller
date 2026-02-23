@@ -6,6 +6,7 @@ from .youtube_service import YouTubeService, YouTubeResult
 from .export_service import ExportService
 from .theme_service import ThemeService
 from .excel_service import ExcelService
+from .pptx_scanner_service import PptxScannerService, PptxScanResult
 
 __all__ = [
     "FolderScanner",
@@ -17,4 +18,6 @@ __all__ = [
     "ExportService",
     "ThemeService",
     "ExcelService",
+    "PptxScannerService",
+    "PptxScanResult",
 ]

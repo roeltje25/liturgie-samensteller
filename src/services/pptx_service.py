@@ -222,7 +222,7 @@ class PptxService:
             'Dim fso, slideIndex, prevCount, newCount',
             'Dim i, j, designName, slideDesignName, layoutIndex, layoutName',
             'Dim importedDesigns, slideDesignMap, slideLayoutMap',
-            'Dim srcDesignName, destDesignIdx, designKey, newLayout',
+            'Dim srcDesignName, destDesignIdx, designKey, newLayout, clonedDesignName',
             'Dim blankSlideRemoved, firstSlideShapeCount, sectionResult',
             '',
             'On Error Resume Next',
@@ -299,9 +299,9 @@ class PptxService:
             vbs_lines.append(f'                WScript.Echo "    Cloning design: " & designName')
             vbs_lines.append(f'                Set clonedDesign = targetPres.Designs.Clone(sourcePres.Designs(i))')
             vbs_lines.append(f'                If Err.Number = 0 Then')
-            vbs_lines.append(f'                    \'Record the index of the cloned design')
-            vbs_lines.append(f'                    importedDesigns.Add "{escaped_source}|" & designName, clonedDesign.Index')
-            vbs_lines.append(f'                    WScript.Echo "      Cloned to index: " & clonedDesign.Index')
+            vbs_lines.append(f'                    \'Record the name of the cloned design (not index, as indices shift when InsertFromFile adds designs)')
+            vbs_lines.append(f'                    importedDesigns.Add "{escaped_source}|" & designName, clonedDesign.Name')
+            vbs_lines.append(f'                    WScript.Echo "      Cloned as: " & clonedDesign.Name & " (index " & clonedDesign.Index & ")"')
             vbs_lines.append(f'                Else')
             vbs_lines.append(f'                    WScript.Echo "      Clone error: " & Err.Description')
             vbs_lines.append(f'                    Err.Clear')
@@ -366,21 +366,31 @@ class PptxService:
                 vbs_lines.append(f'            layoutName = slideLayoutMap.Item(designKey)')
                 vbs_lines.append(f'            designKey = "{escaped_source}|" & srcDesignName')
                 vbs_lines.append(f'            If importedDesigns.Exists(designKey) Then')
-                vbs_lines.append(f'                destDesignIdx = importedDesigns.Item(designKey)')
-                vbs_lines.append(f'                \'Find the matching CustomLayout by name in the cloned design')
-                vbs_lines.append(f'                Set newLayout = Nothing')
-                vbs_lines.append(f'                For j = 1 To targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts.Count')
-                vbs_lines.append(f'                    If targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts(j).Name = layoutName Then')
-                vbs_lines.append(f'                        Set newLayout = targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts(j)')
+                vbs_lines.append(f'                clonedDesignName = importedDesigns.Item(designKey)')
+                vbs_lines.append(f'                \'Find the cloned design by name (indices shift when InsertFromFile adds designs)')
+                vbs_lines.append(f'                destDesignIdx = -1')
+                vbs_lines.append(f'                For j = 1 To targetPres.Designs.Count')
+                vbs_lines.append(f'                    If targetPres.Designs(j).Name = clonedDesignName Then')
+                vbs_lines.append(f'                        destDesignIdx = j')
                 vbs_lines.append(f'                        Exit For')
                 vbs_lines.append(f'                    End If')
                 vbs_lines.append(f'                Next')
-                vbs_lines.append(f'                \'If found, apply the CustomLayout')
-                vbs_lines.append(f'                If Not newLayout Is Nothing Then')
-                vbs_lines.append(f'                    Set targetPres.Slides(slideIndex).CustomLayout = newLayout')
-                vbs_lines.append(f'                    If Err.Number <> 0 Then')
-                vbs_lines.append(f'                        WScript.Echo "    Warning: Could not assign layout to slide " & slideIndex & ": " & Err.Description')
-                vbs_lines.append(f'                        Err.Clear')
+                vbs_lines.append(f'                If destDesignIdx > 0 Then')
+                vbs_lines.append(f'                    \'Find the matching CustomLayout by name in the cloned design')
+                vbs_lines.append(f'                    Set newLayout = Nothing')
+                vbs_lines.append(f'                    For j = 1 To targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts.Count')
+                vbs_lines.append(f'                        If targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts(j).Name = layoutName Then')
+                vbs_lines.append(f'                            Set newLayout = targetPres.Designs(destDesignIdx).SlideMaster.CustomLayouts(j)')
+                vbs_lines.append(f'                            Exit For')
+                vbs_lines.append(f'                        End If')
+                vbs_lines.append(f'                    Next')
+                vbs_lines.append(f'                    \'If found, apply the CustomLayout')
+                vbs_lines.append(f'                    If Not newLayout Is Nothing Then')
+                vbs_lines.append(f'                        Set targetPres.Slides(slideIndex).CustomLayout = newLayout')
+                vbs_lines.append(f'                        If Err.Number <> 0 Then')
+                vbs_lines.append(f'                            WScript.Echo "    Warning: Could not assign layout to slide " & slideIndex & ": " & Err.Description')
+                vbs_lines.append(f'                            Err.Clear')
+                vbs_lines.append(f'                        End If')
                 vbs_lines.append(f'                    End If')
                 vbs_lines.append(f'                End If')
                 vbs_lines.append(f'            End If')
@@ -1327,10 +1337,20 @@ class PptxService:
             print(f"Error filling fields in {pptx_path}: {e}")
             return pptx_path
 
-    def merge_liturgy_v2(self, liturgy: Liturgy) -> str:
+    def merge_liturgy_v2(
+        self,
+        liturgy: Liturgy,
+        song_cover_enabled: bool = False,
+        song_cover_path: Optional[str] = None,
+    ) -> str:
         """
         Create a merged presentation from liturgy sections (v2 format).
         Returns path to the merged file.
+
+        Args:
+            liturgy: The liturgy to merge.
+            song_cover_enabled: Whether to prepend cover slides before songs.
+            song_cover_path: Absolute path to the cover slide PPTX file.
         """
         if not liturgy.sections:
             # Fall back to v1 merge if no sections
@@ -1341,17 +1361,26 @@ class PptxService:
         # Track sections: list of (section_name, start_slide_idx, slide_count)
         section_info = []
         current_slide_idx = 0
+        song_number = 0
 
         for section in liturgy.sections:
             section_start = current_slide_idx
             section_slide_count = 0
 
             if section.is_song:
-                # For song sections, each slide entry represents a song
-                # Group slides by source_path to avoid duplicating slides from same file
+                # For song sections, each unique source_path represents a different song.
+                # Group slides by source_path to avoid duplicating slides from same file.
                 processed_sources = set()
                 for slide in section.slides:
                     if slide.is_stub:
+                        song_number += 1
+                        if song_cover_enabled and song_cover_path and os.path.exists(song_cover_path):
+                            slides_to_copy.append((
+                                song_cover_path,
+                                [0],
+                                {0: {"SONG_NUMBER": str(song_number)}},
+                            ))
+                            section_slide_count += 1
                         stub_path = self._create_stub_presentation(slide.title or section.name)
                         slides_to_copy.append((stub_path, [0], {0: slide.fields}))
                         section_slide_count += 1
@@ -1360,6 +1389,15 @@ class PptxService:
                         if slide.source_path in processed_sources:
                             continue
                         processed_sources.add(slide.source_path)
+
+                        song_number += 1
+                        if song_cover_enabled and song_cover_path and os.path.exists(song_cover_path):
+                            slides_to_copy.append((
+                                song_cover_path,
+                                [0],
+                                {0: {"SONG_NUMBER": str(song_number)}},
+                            ))
+                            section_slide_count += 1
 
                         slide_count = self.get_slide_count(slide.source_path)
                         slides_to_copy.append((

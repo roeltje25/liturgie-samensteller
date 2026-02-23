@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QComboBox,
+    QCheckBox,
     QDialogButtonBox,
     QGroupBox,
     QFileDialog,
@@ -37,7 +38,10 @@ class SettingsDialog(QDialog):
             stub_template_filename=settings.stub_template_filename,
             output_pattern=settings.output_pattern,
             language=settings.language,
+            song_cover_enabled=settings.song_cover_enabled,
+            song_cover_filename=settings.song_cover_filename,
             excel_register_path=settings.excel_register_path,
+            pptx_archive_folder=settings.pptx_archive_folder,
             window_width=settings.window_width,
             window_height=settings.window_height,
         )
@@ -109,6 +113,15 @@ class SettingsDialog(QDialog):
         output_layout.addWidget(output_browse)
         folders_layout.addRow(tr("dialog.settings.output_folder"), output_layout)
 
+        # PPTX archive folder
+        self.pptx_archive_input = QLineEdit()
+        pptx_archive_browse = QPushButton(tr("button.browse"))
+        pptx_archive_browse.clicked.connect(lambda: self._browse_folder(self.pptx_archive_input))
+        pptx_archive_layout = QHBoxLayout()
+        pptx_archive_layout.addWidget(self.pptx_archive_input)
+        pptx_archive_layout.addWidget(pptx_archive_browse)
+        folders_layout.addRow(tr("dialog.settings.pptx_archive_folder"), pptx_archive_layout)
+
         layout.addWidget(folders_group)
 
         # Files group
@@ -132,6 +145,21 @@ class SettingsDialog(QDialog):
         excel_layout.addWidget(self.excel_register_input)
         excel_layout.addWidget(excel_browse)
         files_layout.addRow(tr("dialog.settings.excel_register"), excel_layout)
+
+        # Song cover slide
+        self.song_cover_checkbox = QCheckBox(tr("dialog.settings.song_cover_enabled"))
+        files_layout.addRow("", self.song_cover_checkbox)
+
+        self.song_cover_input = QLineEdit()
+        song_cover_browse = QPushButton(tr("button.browse_file"))
+        song_cover_browse.clicked.connect(self._browse_song_cover_file)
+        song_cover_layout = QHBoxLayout()
+        song_cover_layout.addWidget(self.song_cover_input)
+        song_cover_layout.addWidget(song_cover_browse)
+        files_layout.addRow(tr("dialog.settings.song_cover_file"), song_cover_layout)
+
+        self.song_cover_checkbox.toggled.connect(self.song_cover_input.setEnabled)
+        self.song_cover_checkbox.toggled.connect(song_cover_browse.setEnabled)
 
         layout.addWidget(files_group)
 
@@ -167,6 +195,12 @@ class SettingsDialog(QDialog):
         self.stub_template_input.setText(self.settings.stub_template_filename)
         self.output_pattern_input.setText(self.settings.output_pattern)
         self.excel_register_input.setText(self.settings.excel_register_path)
+        self.pptx_archive_input.setText(self.settings.pptx_archive_folder)
+
+        # Song cover
+        self.song_cover_checkbox.setChecked(self.settings.song_cover_enabled)
+        self.song_cover_input.setText(self.settings.song_cover_filename)
+        self.song_cover_input.setEnabled(self.settings.song_cover_enabled)
 
         # Set language combo
         index = self.language_combo.findData(self.settings.language)
@@ -249,6 +283,23 @@ class SettingsDialog(QDialog):
 
             self.excel_register_input.setText(file_path)
 
+    def _browse_song_cover_file(self) -> None:
+        """Open file browser for song cover slide PPTX."""
+        base = self._get_effective_base()
+        algemeen = self.settings.get_algemeen_path(base)
+        start_dir = algemeen if os.path.isdir(algemeen) else base
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("dialog.settings.song_cover_file"),
+            start_dir,
+            "PowerPoint files (*.pptx);;All files (*.*)"
+        )
+
+        if file_path:
+            # Store just the filename (file lives in algemeen folder)
+            self.song_cover_input.setText(os.path.basename(file_path))
+
     def _on_accept(self) -> None:
         """Handle dialog acceptance."""
         self.settings.base_folder = self.base_folder_input.text()
@@ -260,6 +311,9 @@ class SettingsDialog(QDialog):
         self.settings.stub_template_filename = self.stub_template_input.text()
         self.settings.output_pattern = self.output_pattern_input.text()
         self.settings.excel_register_path = self.excel_register_input.text()
+        self.settings.pptx_archive_folder = self.pptx_archive_input.text()
+        self.settings.song_cover_enabled = self.song_cover_checkbox.isChecked()
+        self.settings.song_cover_filename = self.song_cover_input.text()
         self.settings.language = self.language_combo.currentData()
 
         self.accept()

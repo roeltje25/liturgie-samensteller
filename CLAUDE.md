@@ -49,6 +49,11 @@ Hierarchical: `Liturgy` → `LiturgySection[]` → `LiturgySlide[]`
 - Each object has a UUID `id` field
 - Legacy v1 classes (`LiturgyItem`, `SongLiturgyItem`, etc.) still exist but v2 is primary
 
+#### Song sections vs regular sections
+A **SONG section** is a container for one or more songs. Each song within a section is represented by its `LiturgySlide` leaf nodes that share the same `source_path` (pointing to the song's `.pptx` file). Multiple slides with the same `source_path` are slides of a single song; a different `source_path` means a different song. During merge, slides are grouped by `source_path` so all slides from one song PPTX are included together.
+
+A **REGULAR section** (e.g. readings, prayers, offerings) processes each `LiturgySlide` individually — each slide has its own `source_path` and `slide_index` pointing to a specific slide in a source file.
+
 ### UI Patterns
 - Dialogs follow `__init__` → `_setup_ui()` → `_connect_signals()` pattern
 - Tree widget stores item type in `UserRole` and IDs in `UserRole+1`

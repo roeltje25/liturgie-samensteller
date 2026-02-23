@@ -174,6 +174,8 @@ class MainWindow(QMainWindow):
 
         self.btn_add_song = QPushButton()
         self.btn_add_song.setMinimumHeight(40)
+        self.btn_quick_fill = QPushButton()
+        self.btn_quick_fill.setMinimumHeight(40)
         self.btn_create_song = QPushButton()
         self.btn_create_song.setMinimumHeight(40)
         self.btn_add_generic = QPushButton()
@@ -188,6 +190,7 @@ class MainWindow(QMainWindow):
         self.btn_add_pptx.setMinimumHeight(40)
 
         add_layout.addWidget(self.btn_add_song)
+        add_layout.addWidget(self.btn_quick_fill)
         add_layout.addWidget(self.btn_create_song)
         add_layout.addWidget(self.btn_add_generic)
         add_layout.addWidget(self.btn_add_offering)
@@ -357,6 +360,7 @@ class MainWindow(QMainWindow):
         """Connect all signals."""
         # Buttons
         self.btn_add_song.clicked.connect(self._on_add_song)
+        self.btn_quick_fill.clicked.connect(self._on_quick_fill_songs)
         self.btn_create_song.clicked.connect(self._on_create_song)
         self.btn_add_generic.clicked.connect(self._on_add_generic)
         self.btn_add_offering.clicked.connect(self._on_add_offering)
@@ -452,6 +456,7 @@ class MainWindow(QMainWindow):
 
         # Buttons
         self.btn_add_song.setText(tr("button.add_song"))
+        self.btn_quick_fill.setText(tr("button.quick_fill_songs"))
         self.btn_create_song.setText(tr("button.create_song"))
         self.btn_add_generic.setText(tr("button.add_generic"))
         self.btn_add_offering.setText(tr("button.add_offering"))
@@ -539,6 +544,51 @@ class MainWindow(QMainWindow):
                 self.liturgy_tree.select_section(new_idx)
                 self.unsaved_changes = True
                 # YouTube search is now manual - user can use Edit button or double-click
+
+    def _on_quick_fill_songs(self) -> None:
+        """Open the Quick Fill Songs dialog for bulk song assignment."""
+        from collections import defaultdict
+        from .quick_liturgy_dialog import QuickLiturgyDialog
+
+        songs = self.folder_scanner.scan_songs()
+        song_sections = [s for s in self.liturgy.sections if s.is_song]
+
+        dlg = QuickLiturgyDialog(songs, song_sections, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        # Group result rows by target_section_id (preserving insertion order)
+        groups: dict = defaultdict(list)
+        order = []
+        for row in dlg.result_rows():
+            sid = row["target_section_id"]
+            if sid not in groups:
+                order.append(sid)
+            groups[sid].append(row["slide"])
+
+        for sid in order:
+            slides = groups[sid]
+            if sid is None:
+                # Create one new SONG section per slide
+                for slide in slides:
+                    sec = LiturgySection(
+                        name=slide.title or "",
+                        section_type=SectionType.SONG,
+                        pdf_path=slide.pdf_path,
+                        youtube_links=list(slide.youtube_links),
+                    )
+                    sec.slides.append(slide)
+                    self.liturgy.add_section(sec)
+            else:
+                # Append slides to the existing target section
+                target = next(
+                    (s for s in self.liturgy.sections if s.id == sid), None
+                )
+                if target is not None:
+                    target.slides.extend(slides)
+
+        self.liturgy_tree.set_liturgy(self.liturgy)
+        self.unsaved_changes = True
 
     def _on_create_song(self) -> None:
         """Create a new song from lyrics and add to liturgy."""

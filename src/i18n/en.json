@@ -42,6 +42,7 @@
   "panel.service_info.leader_placeholder": "Enter name...",
 
   "button.add_song": "Add song",
+  "button.quick_fill_songs": "Fill songs\u2026",
   "button.create_song": "Create new song",
   "button.add_generic": "Add generic",
   "button.add_offering": "Add offering",
@@ -320,5 +321,17 @@
   "warning.section_missing_pdf": "Slides missing PDF",
   "warning.no_offering_file": "Offering file not configured or not found",
 
-  "tooltip.fields_filled": "All fields filled"
+  "tooltip.fields_filled": "All fields filled",
+
+  "dialog.quick_fill.title": "Fill songs",
+  "dialog.quick_fill.input_label": "Paste song names (one per line):",
+  "dialog.quick_fill.match_btn": "Match",
+  "dialog.quick_fill.col_typed": "Typed",
+  "dialog.quick_fill.col_matched": "Matched",
+  "dialog.quick_fill.col_section": "Section",
+  "dialog.quick_fill.add_btn": "Add to liturgy",
+  "dialog.quick_fill.find_btn": "Find\u2026",
+  "dialog.quick_fill.stub_label": "not found",
+  "dialog.quick_fill.new_section_option": "New section",
+  "dialog.quick_fill.no_input": "No song names entered."
 }

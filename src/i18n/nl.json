@@ -42,6 +42,7 @@
   "panel.service_info.leader_placeholder": "Voer naam in...",
 
   "button.add_song": "Lied toevoegen",
+  "button.quick_fill_songs": "Liederen invullen\u2026",
   "button.create_song": "Nieuw lied maken",
   "button.add_generic": "Algemeen toevoegen",
   "button.add_offering": "Collecte toevoegen",
@@ -318,5 +319,17 @@
   "warning.section_missing_pdf": "Dia's zonder PDF",
   "warning.no_offering_file": "Collectebestand niet geconfigureerd of niet gevonden",
 
-  "tooltip.fields_filled": "Alle velden ingevuld"
+  "tooltip.fields_filled": "Alle velden ingevuld",
+
+  "dialog.quick_fill.title": "Liederen invullen",
+  "dialog.quick_fill.input_label": "Plak liederen (één per regel):",
+  "dialog.quick_fill.match_btn": "Matchen",
+  "dialog.quick_fill.col_typed": "Getypt",
+  "dialog.quick_fill.col_matched": "Gevonden",
+  "dialog.quick_fill.col_section": "Sectie",
+  "dialog.quick_fill.add_btn": "Toevoegen aan liturgie",
+  "dialog.quick_fill.find_btn": "Zoek\u2026",
+  "dialog.quick_fill.stub_label": "niet gevonden",
+  "dialog.quick_fill.new_section_option": "Nieuwe sectie",
+  "dialog.quick_fill.no_input": "Geen liederen ingevoerd."
 }

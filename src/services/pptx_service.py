@@ -407,7 +407,7 @@ class PptxService:
                 vbs_lines.append(f'                    Next')
                 vbs_lines.append(f'                    \'If found, apply the CustomLayout')
                 vbs_lines.append(f'                    If Not newLayout Is Nothing Then')
-                vbs_lines.append(f'                        targetPres.Slides(slideIndex).CustomLayout = newLayout')
+                vbs_lines.append(f'                        Set targetPres.Slides(slideIndex).CustomLayout = newLayout')
                 vbs_lines.append(f'                        If Err.Number <> 0 Then')
                 vbs_lines.append(f'                            WScript.Echo "    Warning: Could not assign layout to slide " & slideIndex & ": " & Err.Description')
                 vbs_lines.append(f'                            Err.Clear')

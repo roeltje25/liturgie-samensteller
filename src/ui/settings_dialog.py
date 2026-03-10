@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QFileDialog,
     QLabel,
+    QSpinBox,
 )
 from PyQt6.QtCore import Qt
 
@@ -42,6 +43,9 @@ class SettingsDialog(QDialog):
             song_cover_filename=settings.song_cover_filename,
             excel_register_path=settings.excel_register_path,
             pptx_archive_folder=settings.pptx_archive_folder,
+            bible_font_name=settings.bible_font_name,
+            bible_font_size=settings.bible_font_size,
+            bible_show_verse_numbers=settings.bible_show_verse_numbers,
             window_width=settings.window_width,
             window_height=settings.window_height,
         )
@@ -163,6 +167,23 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(files_group)
 
+        # Bible text group
+        bible_group = QGroupBox(tr("dialog.settings.bible_group"))
+        bible_layout = QFormLayout(bible_group)
+
+        self.bible_font_name_input = QLineEdit()
+        bible_layout.addRow(tr("dialog.settings.bible_font_name"), self.bible_font_name_input)
+
+        self.bible_font_size_spin = QSpinBox()
+        self.bible_font_size_spin.setRange(6, 36)
+        self.bible_font_size_spin.setSuffix(" pt")
+        bible_layout.addRow(tr("dialog.settings.bible_font_size"), self.bible_font_size_spin)
+
+        self.bible_show_verse_numbers_check = QCheckBox(tr("dialog.settings.bible_show_verse_numbers"))
+        bible_layout.addRow("", self.bible_show_verse_numbers_check)
+
+        layout.addWidget(bible_group)
+
         # Language group
         lang_layout = QHBoxLayout()
         lang_label = QLabel(tr("dialog.settings.language"))
@@ -201,6 +222,11 @@ class SettingsDialog(QDialog):
         self.song_cover_checkbox.setChecked(self.settings.song_cover_enabled)
         self.song_cover_input.setText(self.settings.song_cover_filename)
         self.song_cover_input.setEnabled(self.settings.song_cover_enabled)
+
+        # Bible text settings
+        self.bible_font_name_input.setText(self.settings.bible_font_name)
+        self.bible_font_size_spin.setValue(self.settings.bible_font_size)
+        self.bible_show_verse_numbers_check.setChecked(self.settings.bible_show_verse_numbers)
 
         # Set language combo
         index = self.language_combo.findData(self.settings.language)
@@ -314,6 +340,9 @@ class SettingsDialog(QDialog):
         self.settings.pptx_archive_folder = self.pptx_archive_input.text()
         self.settings.song_cover_enabled = self.song_cover_checkbox.isChecked()
         self.settings.song_cover_filename = self.song_cover_input.text()
+        self.settings.bible_font_name = self.bible_font_name_input.text().strip() or "Calibri"
+        self.settings.bible_font_size = self.bible_font_size_spin.value()
+        self.settings.bible_show_verse_numbers = self.bible_show_verse_numbers_check.isChecked()
         self.settings.language = self.language_combo.currentData()
 
         self.accept()

@@ -78,6 +78,11 @@ class Settings:
     # Folder containing existing PPTX presentations to scan for songs
     pptx_archive_folder: str = "./Vieringen"
 
+    # Bible text slides
+    bible_font_name: str = "Calibri"
+    bible_font_size: int = 12
+    bible_show_verse_numbers: bool = True
+
     # Window state
     window_width: int = 1200
     window_height: int = 800

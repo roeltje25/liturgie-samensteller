@@ -20,9 +20,10 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QGroupBox,
     QListWidget,
+    QMenu,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QFont
+from PyQt6.QtGui import QBrush, QColor, QFont, QAction
 
 from ..models import Settings
 from ..services.pptx_scanner_service import (
@@ -41,6 +42,10 @@ logger = get_logger("import_pptx_dialog")
 _COLOR_EXCLUDED = QColor(128, 128, 128)   # grey — liturgical items
 _COLOR_UNKNOWN = QColor(200, 120, 0)       # amber — not in library
 _COLOR_REGISTERED = QColor(128, 128, 128)  # grey — already in register
+
+# Custom data roles for child tree items
+_ROLE_CLS = Qt.ItemDataRole.UserRole        # SongClassification
+_ROLE_FILEPATH = Qt.ItemDataRole.UserRole.value + 1  # source pptx filepath
 
 
 class _ScanWorker(QThread):
@@ -328,6 +333,9 @@ class ImportPptxDialog(QDialog):
         self.select_all_btn.clicked.connect(self._on_select_all)
         self.deselect_all_btn.clicked.connect(self._on_deselect_all)
         self.import_btn.clicked.connect(self._on_import)
+        self.results_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.results_tree.customContextMenuRequested.connect(self._on_context_menu)
+        self.results_tree.itemChanged.connect(self._on_child_item_changed)
 
     # ------------------------------------------------------------------
     # Slots
@@ -392,7 +400,11 @@ class ImportPptxDialog(QDialog):
         if result.songs and not result.error:
             try:
                 result.song_classifications = self._scanner.classify_songs(
-                    result.songs, self._songs_path, self._algemeen_path
+                    result.songs,
+                    self._songs_path,
+                    self._algemeen_path,
+                    user_liturgy_items=self.settings.user_liturgy_items,
+                    phase3_candidates=result.phase3_candidates,
                 )
             except Exception as exc:
                 logger.warning(
@@ -436,12 +448,20 @@ class ImportPptxDialog(QDialog):
                 tr("dialog.import_pptx.songs_found").format(count=importable_count),
             )
 
-            # Add colour-coded song children
+            # Add colour-coded song children (each individually checkable)
             if result.song_classifications:
+                self.results_tree.blockSignals(True)
                 for cls in result.song_classifications:
                     child = QTreeWidgetItem(item)
-                    child.setFlags(child.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+                    child.setData(0, _ROLE_CLS, cls)
+                    child.setData(0, _ROLE_FILEPATH, result.filepath)
+                    child.setFlags(
+                        child.flags()
+                        | Qt.ItemFlag.ItemIsUserCheckable
+                        | Qt.ItemFlag.ItemIsEnabled
+                    )
                     if cls.status == SongStatus.EXCLUDED:
+                        child.setCheckState(0, Qt.CheckState.Unchecked)
                         suffix = tr("dialog.import_pptx.status_excluded")
                         child.setText(0, f"  {cls.title} — {suffix}")
                         child.setForeground(0, QBrush(_COLOR_EXCLUDED))
@@ -449,16 +469,27 @@ class ImportPptxDialog(QDialog):
                         font.setItalic(True)
                         child.setFont(0, font)
                     elif cls.status == SongStatus.UNKNOWN:
+                        child.setCheckState(0, Qt.CheckState.Checked)
                         suffix = tr("dialog.import_pptx.status_unknown")
                         child.setText(0, f"  {cls.title} — {suffix}")
                         child.setForeground(0, QBrush(_COLOR_UNKNOWN))
                     else:  # CONFIRMED
+                        child.setCheckState(0, Qt.CheckState.Checked)
                         child.setText(0, f"  {cls.title}")
+                self.results_tree.blockSignals(False)
             else:
+                self.results_tree.blockSignals(True)
                 for song_title in result.songs:
                     child = QTreeWidgetItem(item)
                     child.setText(0, f"  {song_title}")
-                    child.setFlags(child.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+                    child.setData(0, _ROLE_FILEPATH, result.filepath)
+                    child.setFlags(
+                        child.flags()
+                        | Qt.ItemFlag.ItemIsUserCheckable
+                        | Qt.ItemFlag.ItemIsEnabled
+                    )
+                    child.setCheckState(0, Qt.CheckState.Checked)
+                self.results_tree.blockSignals(False)
         else:
             item.setText(2, tr("dialog.import_pptx.no_songs"))
 
@@ -500,6 +531,131 @@ class ImportPptxDialog(QDialog):
         self.status_label.setText(message)
         QMessageBox.warning(self, self.windowTitle(), message)
 
+    def _on_context_menu(self, pos) -> None:
+        item = self.results_tree.itemAt(pos)
+        if item is None:
+            return
+
+        menu = QMenu(self)
+        global_pos = self.results_tree.mapToGlobal(pos)
+
+        if item.parent() is not None:
+            # Child item — individual song/liturgy entry
+            is_checked = item.checkState(0) == Qt.CheckState.Checked
+            if is_checked:
+                toggle_act = QAction(tr("dialog.import_pptx.mark_as_liturgy"), self)
+            else:
+                toggle_act = QAction(tr("dialog.import_pptx.mark_as_song"), self)
+            menu.addAction(toggle_act)
+
+            filepath = item.data(0, _ROLE_FILEPATH)
+            open_act = None
+            if filepath and os.path.exists(filepath):
+                menu.addSeparator()
+                open_act = QAction(tr("dialog.import_pptx.open_pptx"), self)
+                menu.addAction(open_act)
+
+            action = menu.exec(global_pos)
+            if action == toggle_act:
+                new_state = (
+                    Qt.CheckState.Unchecked if is_checked else Qt.CheckState.Checked
+                )
+                item.setCheckState(0, new_state)
+                # Persist the user's decision so future scans apply it automatically
+                cls: Optional[SongClassification] = item.data(0, _ROLE_CLS)
+                title = cls.title if cls else item.text(0).strip().split(" — ")[0].strip()
+                self._update_user_liturgy_items(title, marking_as_liturgy=is_checked)
+            elif open_act and action == open_act:
+                self._open_file(filepath)
+        else:
+            # Parent (file-level) item
+            result = item.data(0, Qt.ItemDataRole.UserRole)
+            if result and result.filepath and os.path.exists(result.filepath):
+                open_act = QAction(tr("dialog.import_pptx.open_pptx"), self)
+                menu.addAction(open_act)
+                action = menu.exec(global_pos)
+                if action == open_act:
+                    self._open_file(result.filepath)
+
+    def _open_file(self, filepath: str) -> None:
+        try:
+            os.startfile(filepath)
+        except Exception as exc:
+            logger.warning("Could not open file %s: %s", filepath, exc)
+            QMessageBox.warning(self, self.windowTitle(), str(exc))
+
+    def _update_user_liturgy_items(self, title: str, marking_as_liturgy: bool) -> None:
+        """Add or remove *title* from the persistent user liturgy items list."""
+        from ..services.pptx_scanner_service import PptxScannerService
+        norm = PptxScannerService._normalize(title)
+        current_norms = [PptxScannerService._normalize(t) for t in self.settings.user_liturgy_items]
+
+        if marking_as_liturgy:
+            if norm not in current_norms:
+                self.settings.user_liturgy_items.append(title)
+                logger.debug("Added to user liturgy items: %s", title)
+        else:
+            self.settings.user_liturgy_items = [
+                t for t, n in zip(self.settings.user_liturgy_items, current_norms)
+                if n != norm
+            ]
+            logger.debug("Removed from user liturgy items: %s", title)
+
+        try:
+            self.settings.save()
+        except Exception as exc:
+            logger.warning("Could not save settings after liturgy item update: %s", exc)
+
+    def _on_child_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
+        """Update child styling and parent count when a child checkbox is toggled."""
+        if column != 0 or item.parent() is None:
+            return
+
+        checked = item.checkState(0) == Qt.CheckState.Checked
+        cls: Optional[SongClassification] = item.data(0, _ROLE_CLS)
+
+        self.results_tree.blockSignals(True)
+        if checked:
+            # Restore colour based on original auto-classification
+            if cls and cls.status == SongStatus.UNKNOWN:
+                item.setForeground(0, QBrush(_COLOR_UNKNOWN))
+            else:
+                item.setForeground(0, QBrush(QColor(0, 0, 0)))
+            font = QFont()
+            font.setItalic(False)
+            item.setFont(0, font)
+            # Restore clean title (strip any "— ..." status suffix added when excluded)
+            if cls:
+                title = cls.title
+            else:
+                raw = item.text(0).strip()
+                title = raw.split(" — ")[0].strip()
+            if cls and cls.status == SongStatus.UNKNOWN:
+                suffix = tr("dialog.import_pptx.status_unknown")
+                item.setText(0, f"  {title} — {suffix}")
+            else:
+                item.setText(0, f"  {title}")
+        else:
+            item.setForeground(0, QBrush(_COLOR_EXCLUDED))
+            font = QFont()
+            font.setItalic(True)
+            item.setFont(0, font)
+            title = cls.title if cls else item.text(0).strip().split(" — ")[0].strip()
+            suffix = tr("dialog.import_pptx.status_excluded")
+            item.setText(0, f"  {title} — {suffix}")
+        self.results_tree.blockSignals(False)
+
+        self._update_parent_song_count(item.parent())
+
+    def _update_parent_song_count(self, parent: QTreeWidgetItem) -> None:
+        """Recompute and display checked-child count on the parent row."""
+        count = sum(
+            1
+            for j in range(parent.childCount())
+            if parent.child(j).checkState(0) == Qt.CheckState.Checked
+        )
+        parent.setText(2, tr("dialog.import_pptx.songs_found").format(count=count))
+
     def _on_select_all(self) -> None:
         for i in range(self.results_tree.topLevelItemCount()):
             item = self.results_tree.topLevelItem(i)
@@ -527,7 +683,7 @@ class ImportPptxDialog(QDialog):
 
         excel_service = ExcelService(excel_path)
 
-        # Build song rows from checked files (skip EXCLUDED songs)
+        # Build song rows from checked files — respect per-child checkbox overrides
         all_rows: List[dict] = []
         for i in range(self.results_tree.topLevelItemCount()):
             item = self.results_tree.topLevelItem(i)
@@ -540,16 +696,22 @@ class ImportPptxDialog(QDialog):
                 logger.warning("Skipping %s – no service date", result.filename)
                 continue
 
-            if result.song_classifications:
-                for cls in result.song_classifications:
-                    if cls.status != SongStatus.EXCLUDED:
-                        all_rows.append({
-                            "file": result.filename,
-                            "date": result.service_date,
-                            "title": cls.title,
-                            "status": cls.status,
-                            "in_register": False,
-                        })
+            if item.childCount() > 0:
+                # Use individual child checkboxes (user may have overridden auto-classification)
+                for j in range(item.childCount()):
+                    child = item.child(j)
+                    if child.checkState(0) != Qt.CheckState.Checked:
+                        continue
+                    cls: Optional[SongClassification] = child.data(0, _ROLE_CLS)
+                    title = cls.title if cls else child.text(0).strip()
+                    status = cls.status if cls else SongStatus.UNKNOWN
+                    all_rows.append({
+                        "file": result.filename,
+                        "date": result.service_date,
+                        "title": title,
+                        "status": status,
+                        "in_register": False,
+                    })
             else:
                 for song in result.songs:
                     all_rows.append({

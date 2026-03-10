@@ -193,6 +193,9 @@
   "dialog.import_pptx.validate_registered": "Al geregistreerd",
   "dialog.import_pptx.validate_summary": "{count} lied(eren) toe te voegen uit {files} bestand(en).",
   "dialog.import_pptx.confirm_import": "Bevestigen & Importeren",
+  "dialog.import_pptx.mark_as_liturgy": "Markeren als liturgisch item",
+  "dialog.import_pptx.mark_as_song": "Markeren als lied",
+  "dialog.import_pptx.open_pptx": "Openen in PowerPoint",
 
   "dialog.firstrun.title": "Welkom bij Liturgie Samensteller",
   "dialog.firstrun.message": "Selecteer de basismap waar uw liturgie bestanden staan (liederen, collecte, etc.):",

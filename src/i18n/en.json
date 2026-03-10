@@ -193,6 +193,9 @@
   "dialog.import_pptx.validate_registered": "Already registered",
   "dialog.import_pptx.validate_summary": "{count} song(s) to add across {files} file(s).",
   "dialog.import_pptx.confirm_import": "Confirm & Import",
+  "dialog.import_pptx.mark_as_liturgy": "Mark as liturgical item",
+  "dialog.import_pptx.mark_as_song": "Mark as song",
+  "dialog.import_pptx.open_pptx": "Open in PowerPoint",
 
   "dialog.firstrun.title": "Welcome to Liturgy Builder",
   "dialog.firstrun.message": "Select the base folder where your liturgy files are located (songs, offerings, etc.):",

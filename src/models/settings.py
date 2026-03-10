@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from typing import List, Optional
 
 from ..logging_config import get_logger
 
@@ -77,6 +77,10 @@ class Settings:
 
     # Folder containing existing PPTX presentations to scan for songs
     pptx_archive_folder: str = "./Vieringen"
+
+    # User-curated list of liturgy item titles that should never be treated as songs.
+    # Populated when the user explicitly marks an item as "liturgical" in the import dialog.
+    user_liturgy_items: List[str] = field(default_factory=list)
 
     # Window state
     window_width: int = 1200

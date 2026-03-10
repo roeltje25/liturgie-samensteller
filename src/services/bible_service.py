@@ -75,6 +75,44 @@ BUILTIN_TRANSLATIONS = [
     {"id": 400,  "abbreviation": "SYNO",     "name": "Синодальный перевод",              "language": "ru", "language_name": "Русский"},
     # Arabic
     {"id": 3,    "abbreviation": "AVDB",     "name": "Arabic Bible",                    "language": "ar", "language_name": "العربية"},
+    # Persian / Farsi
+    {"id": 131,  "abbreviation": "PCB",      "name": "Persian Contemporary Bible",      "language": "fa", "language_name": "فارسی"},
+    {"id": 341,  "abbreviation": "NMV",      "name": "Farsi New Millennium Version",    "language": "fa", "language_name": "فارسی"},
+    # Chinese (Simplified)
+    {"id": 2,    "abbreviation": "CUNPSS",   "name": "Chinese Union Version (Simplified)", "language": "zh-Hans", "language_name": "中文(简体)"},
+    # Chinese (Traditional)
+    {"id": 46,   "abbreviation": "CUVT",     "name": "Chinese Union Version (Traditional)", "language": "zh-Hant", "language_name": "中文(繁體)"},
+    # Korean
+    {"id": 136,  "abbreviation": "KRV",      "name": "Korean Revised Version",          "language": "ko", "language_name": "한국어"},
+    {"id": 1877, "abbreviation": "NKRV",     "name": "New Korean Revised Version",      "language": "ko", "language_name": "한국어"},
+    # Turkish
+    {"id": 173,  "abbreviation": "TCL02",    "name": "Türkçe",                          "language": "tr", "language_name": "Türkçe"},
+    # Polish
+    {"id": 35,   "abbreviation": "UBG",      "name": "Uwspółcześniona Biblia Gdańska",  "language": "pl", "language_name": "Polski"},
+    # Indonesian
+    {"id": 306,  "abbreviation": "TB",       "name": "Terjemahan Baru",                 "language": "id", "language_name": "Indonesia"},
+    # Romanian
+    {"id": 191,  "abbreviation": "RMNN",     "name": "Biblia Nouă",                     "language": "ro", "language_name": "Română"},
+    # Ukrainian
+    {"id": 186,  "abbreviation": "UKR",      "name": "Ukrainian Bible",                 "language": "uk", "language_name": "Українська"},
+    # Hungarian
+    {"id": 90,   "abbreviation": "KAR",      "name": "Károli Biblia",                   "language": "hu", "language_name": "Magyar"},
+    # Swedish
+    {"id": 167,  "abbreviation": "SVL",      "name": "Svenska Folkbibeln",              "language": "sv", "language_name": "Svenska"},
+    # Norwegian
+    {"id": 65,   "abbreviation": "NB",       "name": "Norsk Bibel",                     "language": "no", "language_name": "Norsk"},
+    # Danish
+    {"id": 43,   "abbreviation": "DN1933",   "name": "Bibelen på dansk",                "language": "da", "language_name": "Dansk"},
+    # Finnish
+    {"id": 330,  "abbreviation": "FB92",     "name": "Raamattu 1992",                   "language": "fi", "language_name": "Suomi"},
+    # Greek (Modern)
+    {"id": 2079, "abbreviation": "GKPNT",    "name": "Greek New Testament (Tischendorf)", "language": "el", "language_name": "Ελληνικά"},
+    # Hebrew
+    {"id": 2302, "abbreviation": "WLC",      "name": "Westminster Leningrad Codex",     "language": "he", "language_name": "עברית"},
+    # Hindi
+    {"id": 40,   "abbreviation": "ERV-HI",   "name": "Easy-to-Read Version (Hindi)",    "language": "hi", "language_name": "हिन्दी"},
+    # Tagalog / Filipino
+    {"id": 54,   "abbreviation": "TAB",      "name": "Tagalog Bible",                   "language": "tl", "language_name": "Filipino"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -227,8 +265,8 @@ class BibleReference:
     def usfm_passage(self) -> str:
         """USFM reference string for the Platform API passages endpoint."""
         if self.whole_chapter:
-            # Whole chapter: use a very large end verse; the API returns what exists
-            return f"{self.book_usfm}.{self.chapter}.1-{self.book_usfm}.{self.chapter}.200"
+            # Whole chapter: use chapter-level USFM (no verse numbers)
+            return f"{self.book_usfm}.{self.chapter}"
         start = f"{self.book_usfm}.{self.chapter}.{self.verse_start}"
         ch_end = self.chapter_end if self.chapter_end else self.chapter
         v_end = self.verse_end if self.verse_end else self.verse_start
@@ -467,9 +505,13 @@ class BibleService:
     def _fetch_for_reference(
         self, reference: BibleReference, version_id: int
     ) -> List[BibleVerse]:
-        """Dispatch to single-passage or multi-chapter fetch."""
-        if reference.chapter_end and reference.chapter_end != reference.chapter:
-            return self._fetch_cross_chapter(reference, version_id)
+        """Fetch a passage using the USFM range from the reference."""
+        is_cross = bool(reference.chapter_end and reference.chapter_end != reference.chapter)
+        if is_cross:
+            # Single API call with full range (e.g. REV.12.40-REV.13.18).
+            # Pass verse_start=1/verse_end=None so the verse filter accepts all
+            # returned verses (verse numbers restart at 1 per chapter).
+            return self._fetch_passage(reference.usfm_passage, 1, None, False, version_id)
         return self._fetch_passage(reference.usfm_passage, reference.verse_start,
                                    reference.verse_end, reference.whole_chapter, version_id)
 
@@ -504,40 +546,6 @@ class BibleService:
         verses = self._parse_passage(data, verse_start, verse_end, whole_chapter)
         self._passage_cache[cache_key] = verses
         return verses
-
-    def _fetch_cross_chapter(
-        self, reference: BibleReference, version_id: int
-    ) -> List[BibleVerse]:
-        """Fetch a cross-chapter range by splicing two (or more) chapter portions."""
-        ch_start = reference.chapter
-        ch_end = reference.chapter_end
-
-        all_verses: List[BibleVerse] = []
-        seq = 1
-
-        for ch in range(ch_start, ch_end + 1):
-            if ch == ch_start:
-                v_from = reference.verse_start
-                v_to = None
-            elif ch == ch_end:
-                v_from = 1
-                v_to = reference.verse_end
-            else:
-                v_from = 1
-                v_to = None
-
-            usfm = f"{reference.book_usfm}.{ch}.{v_from}-{reference.book_usfm}.{ch}.200"
-            try:
-                chapter_verses = self._fetch_passage(usfm, v_from, v_to, False, version_id)
-            except Exception as exc:
-                logger.warning("Could not fetch chapter %s for cross-chapter ref: %s", ch, exc)
-                chapter_verses = []
-
-            for v in chapter_verses:
-                all_verses.append(BibleVerse(verse_num=seq, text=v.text))
-                seq += 1
-
-        return all_verses
 
     def _parse_passage(
         self,
@@ -625,16 +633,16 @@ class BibleService:
         return _filter_by_range(verses, verse_start, verse_end, whole_chapter)
 
     def _fetch_bibles_list(self, language_tag: str) -> List[BibleTranslation]:
-        """Fetch bibles from the Platform API, filtered by language."""
-        results: List[BibleTranslation] = []
-        page_token: Optional[str] = None
+        """Fetch bibles from the Platform API, filtered by language.
 
-        while True:
-            # Omit page_size (causes 422); use only language_tag
-            params: dict = {"language_tag": language_tag}
-            if page_token:
-                params["page_token"] = page_token
-
+        Tries parameter name variants in order:
+          1. language_tag=<tag>
+          2. language=<tag>
+          3. No filter (client-side filtering)
+        """
+        # Try parameter variants: language_tag first, then language
+        for param_name in ("language_tag", "language"):
+            params: dict = {param_name: language_tag}
             try:
                 resp = requests.get(
                     f"{YOUVERSION_API_BASE}/bibles",
@@ -642,75 +650,75 @@ class BibleService:
                     params=params,
                     timeout=REQUEST_TIMEOUT,
                 )
-                resp.raise_for_status()
-            except requests.HTTPError as exc:
-                # If language_tag filter causes 422, try fetching all and filtering client-side
-                if exc.response is not None and exc.response.status_code == 422 and "language_tag" in params:
+                if resp.status_code == 422:
                     logger.warning(
-                        "language_tag filter returned 422 (%s); "
-                        "fetching all bibles and filtering client-side",
-                        exc.response.text[:200],
+                        "Parameter '%s=%s' returned 422: %s",
+                        param_name, language_tag, resp.text[:300],
                     )
-                    return self._fetch_bibles_list_all(language_tag)
-                raise
+                    continue  # try next variant
+                resp.raise_for_status()
+                results = self._parse_bibles_list(resp.json(), language_tag)
+                logger.info(
+                    "Fetched %d bibles for '%s' using param '%s'",
+                    len(results), language_tag, param_name,
+                )
+                return results
+            except requests.HTTPError as exc:
+                logger.warning(
+                    "HTTP error with %s=%s: %s – %s",
+                    param_name, language_tag, exc,
+                    exc.response.text[:300] if exc.response is not None else "no body",
+                )
+                continue
 
-            data = resp.json()
-            bibles = data.get("data", data) if isinstance(data, dict) else data
-            if isinstance(bibles, list):
-                for b in bibles:
-                    if not isinstance(b, dict):
-                        continue
-                    lang_info = b.get("language", {})
-                    lang_tag = lang_info.get("tag", language_tag) if isinstance(lang_info, dict) else language_tag
-                    lang_name = lang_info.get("name", language_tag) if isinstance(lang_info, dict) else language_tag
-                    bid = b.get("id")
-                    if bid is None:
-                        continue
-                    results.append(BibleTranslation(
-                        id=int(bid),
-                        abbreviation=b.get("abbreviation", str(bid)),
-                        name=b.get("title", b.get("local_title", str(bid))),
-                        language=lang_tag,
-                        language_name=lang_name,
-                    ))
-
-            page_token = data.get("next_page_token") if isinstance(data, dict) else None
-            if not page_token:
-                break
-
-        return results
+        # Fallback: fetch all bibles and filter client-side
+        return self._fetch_bibles_list_all(language_tag)
 
     def _fetch_bibles_list_all(self, language_tag: str) -> List[BibleTranslation]:
         """Fetch all bibles (no language filter) and filter client-side."""
-        resp = requests.get(
-            f"{YOUVERSION_API_BASE}/bibles",
-            headers=self._get_headers(),
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = requests.get(
+                f"{YOUVERSION_API_BASE}/bibles",
+                headers=self._get_headers(),
+                timeout=REQUEST_TIMEOUT,
+            )
+            if not resp.ok:
+                logger.warning(
+                    "GET /bibles (no params) returned %s: %s",
+                    resp.status_code, resp.text[:400],
+                )
+                resp.raise_for_status()
+        except requests.HTTPError:
+            raise
+
+        return self._parse_bibles_list(resp.json(), language_tag)
+
+    @staticmethod
+    def _parse_bibles_list(data: dict, language_filter: str) -> List[BibleTranslation]:
+        """Parse a /bibles API response into BibleTranslation objects."""
         bibles = data.get("data", data) if isinstance(data, dict) else data
+        if not isinstance(bibles, list):
+            return []
 
         results: List[BibleTranslation] = []
-        if isinstance(bibles, list):
-            for b in bibles:
-                if not isinstance(b, dict):
-                    continue
-                lang_info = b.get("language", {})
-                lang_tag = lang_info.get("tag", "") if isinstance(lang_info, dict) else ""
-                if language_tag and not lang_tag.startswith(language_tag):
-                    continue
-                lang_name = lang_info.get("name", lang_tag) if isinstance(lang_info, dict) else lang_tag
-                bid = b.get("id")
-                if bid is None:
-                    continue
-                results.append(BibleTranslation(
-                    id=int(bid),
-                    abbreviation=b.get("abbreviation", str(bid)),
-                    name=b.get("title", b.get("local_title", str(bid))),
-                    language=lang_tag,
-                    language_name=lang_name,
-                ))
+        for b in bibles:
+            if not isinstance(b, dict):
+                continue
+            lang_info = b.get("language", {})
+            lang_tag = lang_info.get("tag", "") if isinstance(lang_info, dict) else ""
+            if language_filter and not lang_tag.startswith(language_filter):
+                continue
+            lang_name = lang_info.get("name", lang_tag) if isinstance(lang_info, dict) else lang_tag
+            bid = b.get("id")
+            if bid is None:
+                continue
+            results.append(BibleTranslation(
+                id=int(bid),
+                abbreviation=b.get("abbreviation", str(bid)),
+                name=b.get("title", b.get("local_title", str(bid))),
+                language=lang_tag,
+                language_name=lang_name,
+            ))
         return results
 
 

@@ -6,6 +6,7 @@ requests>=2.28.0
 lxml>=4.9.0
 openpyxl>=3.1.0
 pywin32>=306
+qrcode[pil]>=7.4.0
 
 # PowerPoint features (Windows):
 # - Requires Microsoft PowerPoint installed

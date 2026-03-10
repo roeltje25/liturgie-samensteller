@@ -78,6 +78,11 @@ class Settings:
     # Folder containing existing PPTX presentations to scan for songs
     pptx_archive_folder: str = "./Vieringen"
 
+    # Bible text slides
+    bible_font_name: str = "Calibri"
+    bible_font_size: int = 12
+    bible_show_verse_numbers: bool = True
+    youversion_api_key: str = ""
     # User-curated list of liturgy item titles that should never be treated as songs.
     # Populated when the user explicitly marks an item as "liturgical" in the import dialog.
     user_liturgy_items: List[str] = field(default_factory=list)

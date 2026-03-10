@@ -58,6 +58,7 @@ from .field_editor import SlideFieldEditor, BulkFieldEditor
 from .theme_picker import ThemeSectionPicker
 from .section_editor import SectionEditorDialog
 from .about_dialog import AboutDialog
+from .bible_picker import BiblePickerDialog
 
 
 class MainWindow(QMainWindow):
@@ -198,6 +199,10 @@ class MainWindow(QMainWindow):
         add_layout.addWidget(self.btn_add_section)
         add_layout.addWidget(self.btn_add_pptx)
 
+        self.btn_add_bible = QPushButton()
+        self.btn_add_bible.setMinimumHeight(40)
+        add_layout.addWidget(self.btn_add_bible)
+
         # Separator
         add_layout.addSpacing(20)
 
@@ -321,6 +326,8 @@ class MainWindow(QMainWindow):
         self.action_check_links = self.tools_menu.addAction("")
         self.action_edit_fields = self.tools_menu.addAction("")
         self.tools_menu.addSeparator()
+        self.action_add_bible = self.tools_menu.addAction("")
+        self.tools_menu.addSeparator()
         self.action_import_pptx = self.tools_menu.addAction("")
         self.tools_menu.addSeparator()
         self.action_settings = self.tools_menu.addAction("")
@@ -367,6 +374,7 @@ class MainWindow(QMainWindow):
         self.btn_add_from_theme.clicked.connect(self._on_add_from_theme)
         self.btn_add_section.clicked.connect(self._on_add_empty_section)
         self.btn_add_pptx.clicked.connect(self._on_add_pptx)
+        self.btn_add_bible.clicked.connect(self._on_add_bible)
         self.btn_edit_fields.clicked.connect(self._on_edit_fields)
         self.btn_share.clicked.connect(self._on_share)
         self.btn_delete.clicked.connect(self._on_delete)
@@ -386,6 +394,7 @@ class MainWindow(QMainWindow):
 
         self.action_check_links.triggered.connect(self._on_check_links)
         self.action_edit_fields.triggered.connect(self._on_edit_fields)
+        self.action_add_bible.triggered.connect(self._on_add_bible)
         self.action_import_pptx.triggered.connect(self._on_import_pptx)
         self.action_settings.triggered.connect(self._on_settings)
 
@@ -436,6 +445,7 @@ class MainWindow(QMainWindow):
         self.tools_menu.setTitle(tr("menu.tools"))
         self.action_check_links.setText(tr("menu.tools.check_links"))
         self.action_edit_fields.setText(tr("menu.tools.edit_fields"))
+        self.action_add_bible.setText(tr("menu.tools.add_bible"))
         self.action_import_pptx.setText(tr("menu.tools.import_pptx"))
         self.action_settings.setText(tr("menu.tools.settings"))
 
@@ -463,6 +473,7 @@ class MainWindow(QMainWindow):
         self.btn_add_from_theme.setText(tr("button.add_from_theme"))
         self.btn_add_section.setText(tr("button.add_section"))
         self.btn_add_pptx.setText(tr("button.add_pptx"))
+        self.btn_add_bible.setText(tr("button.add_bible"))
         self.btn_edit_fields.setText(tr("button.edit_fields"))
         self.btn_share.setText("\U0001F4E4 " + tr("button.share"))
         self.btn_delete.setText(tr("button.delete"))
@@ -789,6 +800,87 @@ class MainWindow(QMainWindow):
         self.liturgy_tree.set_liturgy(self.liturgy)
         self.liturgy_tree.select_section(new_idx)
         self.unsaved_changes = True
+
+    def _on_add_bible(self) -> None:
+        """Add Bible text slides to the liturgy."""
+        import shutil
+
+        dialog = BiblePickerDialog(
+            default_font_name=self.settings.bible_font_name,
+            default_font_size=self.settings.bible_font_size,
+            api_key=self.settings.youversion_api_key,
+            parent=self,
+        )
+
+        if not dialog.exec():
+            return
+
+        tmp_path = dialog.result_pptx_path
+        section_name = dialog.result_section_name or tr("button.add_bible")
+
+        if not tmp_path or not os.path.exists(tmp_path):
+            QMessageBox.warning(self, tr("dialog.bible.title"), tr("dialog.bible.error.no_file"))
+            return
+
+        # Persist the generated PPTX next to the liturgy or in the base folder
+        bible_dir = os.path.join(
+            self.settings.get_effective_base_path(self.base_path), "BibelTeksten"
+        )
+        os.makedirs(bible_dir, exist_ok=True)
+
+        # Sanitise section name for filename
+        safe_name = "".join(c if c.isalnum() or c in " -_.()" else "_" for c in section_name)
+        safe_name = safe_name.strip()[:80]
+        dest_path = os.path.join(bible_dir, f"{safe_name}.pptx")
+
+        # Avoid overwriting existing file
+        counter = 1
+        base_dest = dest_path
+        while os.path.exists(dest_path):
+            root, ext = os.path.splitext(base_dest)
+            dest_path = f"{root}_{counter}{ext}"
+            counter += 1
+
+        try:
+            shutil.move(tmp_path, dest_path)
+        except Exception as exc:
+            logger.error("Failed to move Bible PPTX: %s", exc, exc_info=True)
+            QMessageBox.critical(
+                self,
+                tr("dialog.bible.title"),
+                tr("error.save_failed", error=str(exc)),
+            )
+            return
+
+        # Count slides in the generated PPTX
+        slides_info = self.pptx_service.get_slides_info(dest_path)
+
+        section = LiturgySection(
+            name=section_name,
+            section_type=SectionType.REGULAR,
+        )
+        for slide_info in slides_info:
+            slide = LiturgySlide(
+                title=slide_info.get("title", section_name),
+                slide_index=slide_info["index"],
+                source_path=dest_path,
+            )
+            section.slides.append(slide)
+
+        if not section.slides:
+            # Fallback: single slide entry if info retrieval failed
+            slide = LiturgySlide(
+                title=section_name,
+                slide_index=0,
+                source_path=dest_path,
+            )
+            section.slides.append(slide)
+
+        new_idx = self._insert_section_at_cursor(section)
+        self.liturgy_tree.set_liturgy(self.liturgy)
+        self.liturgy_tree.select_section(new_idx)
+        self.unsaved_changes = True
+        self.status_label.setText(tr("status.bible_added", name=section_name))
 
     def _on_delete(self) -> None:
         """Delete selected item or section."""

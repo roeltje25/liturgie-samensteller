@@ -161,6 +161,7 @@ class _GenerateSlidesWorker(QThread):
         translation_ids: List[int],
         config: BibleSlideConfig,
         reference_overrides: Dict[int, str],
+        api_key: str = "",
         parent=None,
     ):
         super().__init__(parent)
@@ -168,11 +169,12 @@ class _GenerateSlidesWorker(QThread):
         self._translation_ids = translation_ids
         self._config = config
         self._overrides = reference_overrides
+        self._api_key = api_key
 
     def run(self) -> None:
         try:
             self.progress.emit(tr("dialog.bible.status.fetching"))
-            svc = BibleSlideService()
+            svc = BibleSlideService(BibleService(api_key=self._api_key))
             path = svc.create_slides(
                 self._reference,
                 self._translation_ids,
@@ -201,10 +203,11 @@ class BiblePickerDialog(QDialog):
         self,
         default_font_name: str = "Calibri",
         default_font_size: int = 12,
+        api_key: str = "",
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._bible_service = BibleService()
+        self._bible_service = BibleService(api_key=api_key)
         self._worker: Optional[_GenerateSlidesWorker] = None
         self._fetch_worker: Optional[_FetchTranslationsWorker] = None
         self._preview_worker: Optional[_FetchPreviewWorker] = None
@@ -255,6 +258,16 @@ class BiblePickerDialog(QDialog):
         ref_form.addRow("", self.reference_status)
 
         outer.addWidget(ref_group)
+
+        # ---- API key warning (shown when key is not configured) ----
+        self._no_key_label = QLabel(tr("dialog.bible.no_api_key_warning"))
+        self._no_key_label.setStyleSheet(
+            "background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;"
+            "border-radius:3px;padding:6px;"
+        )
+        self._no_key_label.setWordWrap(True)
+        self._no_key_label.setVisible(not self._bible_service.has_api_key())
+        outer.addWidget(self._no_key_label)
 
         # ---- Middle: main splitter ----
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -831,7 +844,10 @@ class BiblePickerDialog(QDialog):
 
         self._set_generating(True)
 
-        self._worker = _GenerateSlidesWorker(reference, translation_ids, config, overrides, self)
+        self._worker = _GenerateSlidesWorker(
+            reference, translation_ids, config, overrides,
+            api_key=self._bible_service._api_key, parent=self,
+        )
         self._worker.finished.connect(self._on_generation_done)
         self._worker.error.connect(self._on_generation_error)
         self._worker.progress.connect(self._on_generation_progress)

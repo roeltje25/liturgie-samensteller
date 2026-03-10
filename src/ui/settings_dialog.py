@@ -46,6 +46,7 @@ class SettingsDialog(QDialog):
             bible_font_name=settings.bible_font_name,
             bible_font_size=settings.bible_font_size,
             bible_show_verse_numbers=settings.bible_show_verse_numbers,
+            youversion_api_key=settings.youversion_api_key,
             window_width=settings.window_width,
             window_height=settings.window_height,
         )
@@ -182,6 +183,18 @@ class SettingsDialog(QDialog):
         self.bible_show_verse_numbers_check = QCheckBox(tr("dialog.settings.bible_show_verse_numbers"))
         bible_layout.addRow("", self.bible_show_verse_numbers_check)
 
+        self.youversion_api_key_input = QLineEdit()
+        self.youversion_api_key_input.setPlaceholderText(
+            tr("dialog.settings.youversion_api_key_placeholder")
+        )
+        self.youversion_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        bible_layout.addRow(tr("dialog.settings.youversion_api_key"), self.youversion_api_key_input)
+
+        api_key_hint = QLabel(tr("dialog.settings.youversion_api_key_hint"))
+        api_key_hint.setStyleSheet("color: grey; font-size: 11px;")
+        api_key_hint.setWordWrap(True)
+        bible_layout.addRow("", api_key_hint)
+
         layout.addWidget(bible_group)
 
         # Language group
@@ -227,6 +240,7 @@ class SettingsDialog(QDialog):
         self.bible_font_name_input.setText(self.settings.bible_font_name)
         self.bible_font_size_spin.setValue(self.settings.bible_font_size)
         self.bible_show_verse_numbers_check.setChecked(self.settings.bible_show_verse_numbers)
+        self.youversion_api_key_input.setText(self.settings.youversion_api_key)
 
         # Set language combo
         index = self.language_combo.findData(self.settings.language)
@@ -343,6 +357,7 @@ class SettingsDialog(QDialog):
         self.settings.bible_font_name = self.bible_font_name_input.text().strip() or "Calibri"
         self.settings.bible_font_size = self.bible_font_size_spin.value()
         self.settings.bible_show_verse_numbers = self.bible_show_verse_numbers_check.isChecked()
+        self.settings.youversion_api_key = self.youversion_api_key_input.text().strip()
         self.settings.language = self.language_combo.currentData()
 
         self.accept()

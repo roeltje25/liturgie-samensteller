@@ -82,6 +82,7 @@ class Settings:
     bible_font_name: str = "Calibri"
     bible_font_size: int = 12
     bible_show_verse_numbers: bool = True
+    youversion_api_key: str = ""
 
     # Window state
     window_width: int = 1200

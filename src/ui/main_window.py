@@ -808,6 +808,7 @@ class MainWindow(QMainWindow):
         dialog = BiblePickerDialog(
             default_font_name=self.settings.bible_font_name,
             default_font_size=self.settings.bible_font_size,
+            api_key=self.settings.youversion_api_key,
             parent=self,
         )
 

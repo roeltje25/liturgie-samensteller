@@ -167,6 +167,11 @@
   "dialog.settings.bible_font_name": "Lettertype:",
   "dialog.settings.bible_font_size": "Lettergrootte:",
   "dialog.settings.bible_show_verse_numbers": "Versnummers weergeven",
+  "dialog.settings.youversion_api_key": "YouVersion API-sleutel:",
+  "dialog.settings.youversion_api_key_placeholder": "Voer uw API-sleutel in...",
+  "dialog.settings.youversion_api_key_hint": "Gratis API-sleutel aanvragen op developers.youversion.com",
+
+  "dialog.bible.no_api_key_warning": "⚠ Geen YouVersion API-sleutel geconfigureerd. Ga naar Instellingen → Bijbeltekst dia's en voeg uw gratis API-sleutel in van developers.youversion.com. Zonder API-sleutel kan geen bijbeltekst worden opgehaald.",
 
   "dialog.bible.title": "Bijbeltekst dia's toevoegen",
   "dialog.bible.reference_group": "Bijbelverwijzing",

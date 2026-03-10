@@ -1,14 +1,13 @@
-"""Bible text fetching service using the YouVersion (bible.com) API.
+"""Bible text fetching service using the YouVersion Platform API.
 
-Uses the informal YouVersion web API to fetch Bible texts in multiple translations.
-The API is not officially documented but is widely used by community projects.
+Uses the official YouVersion Platform API (api.youversion.com/v1) to fetch
+Bible texts in multiple translations.  A free API key can be obtained from
+https://developers.youversion.com.
 """
 
-import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import quote
 
 import requests
 
@@ -16,15 +15,16 @@ from ..logging_config import get_logger
 
 logger = get_logger("bible_service")
 
-# YouVersion API base URLs
-YOUVERSION_API_BASE = "https://nodejs.bible.com/api/bible"
-YOUVERSION_VERSIONS_URL = "https://www.bible.com/api/bible/versions"
+# YouVersion Platform API base URL
+YOUVERSION_API_BASE = "https://api.youversion.com/v1"
+
+# bible.com share URL (unchanged – same system)
 YOUVERSION_SHARE_BASE = "https://www.bible.com/bible"
 
 # Request timeout in seconds
 REQUEST_TIMEOUT = 15
 
-# Default request headers to mimic a browser
+# Default request headers
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -33,67 +33,58 @@ _HEADERS = {
     ),
     "Accept": "application/json",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.bible.com/",
 }
 
 # ---------------------------------------------------------------------------
 # Built-in translation catalog
-# These are YouVersion version IDs for commonly used Bible translations.
-# The IDs correspond to the numeric version identifiers used by bible.com.
+# YouVersion numeric IDs (same IDs used on bible.com).
 # ---------------------------------------------------------------------------
 BUILTIN_TRANSLATIONS = [
     # English
-    {"id": 1,    "abbreviation": "KJV",       "name": "King James Version",              "language": "en", "language_name": "English"},
-    {"id": 59,   "abbreviation": "ESV",       "name": "English Standard Version",        "language": "en", "language_name": "English"},
-    {"id": 111,  "abbreviation": "NIV",       "name": "New International Version",       "language": "en", "language_name": "English"},
-    {"id": 116,  "abbreviation": "NLT",       "name": "New Living Translation",          "language": "en", "language_name": "English"},
-    {"id": 100,  "abbreviation": "NASB",      "name": "New American Standard Bible",     "language": "en", "language_name": "English"},
-    {"id": 206,  "abbreviation": "WEB",       "name": "World English Bible",             "language": "en", "language_name": "English"},
-    {"id": 2692, "abbreviation": "NIV11",     "name": "New International Version 2011",  "language": "en", "language_name": "English"},
-    {"id": 97,   "abbreviation": "MSG",       "name": "The Message",                     "language": "en", "language_name": "English"},
-    {"id": 37,   "abbreviation": "HCSB",      "name": "Holman Christian Standard Bible", "language": "en", "language_name": "English"},
+    {"id": 1,    "abbreviation": "KJV",      "name": "King James Version",               "language": "en", "language_name": "English"},
+    {"id": 59,   "abbreviation": "ESV",      "name": "English Standard Version",         "language": "en", "language_name": "English"},
+    {"id": 111,  "abbreviation": "NIV",      "name": "New International Version",        "language": "en", "language_name": "English"},
+    {"id": 116,  "abbreviation": "NLT",      "name": "New Living Translation",           "language": "en", "language_name": "English"},
+    {"id": 100,  "abbreviation": "NASB",     "name": "New American Standard Bible",      "language": "en", "language_name": "English"},
+    {"id": 206,  "abbreviation": "WEB",      "name": "World English Bible",              "language": "en", "language_name": "English"},
+    {"id": 97,   "abbreviation": "MSG",      "name": "The Message",                      "language": "en", "language_name": "English"},
+    {"id": 37,   "abbreviation": "HCSB",     "name": "Holman Christian Standard Bible",  "language": "en", "language_name": "English"},
     # Dutch
-    {"id": 48,   "abbreviation": "NBG51",     "name": "NBG-vertaling 1951",              "language": "nl", "language_name": "Nederlands"},
-    {"id": 328,  "abbreviation": "NBV",       "name": "Nieuwe Bijbelvertaling",           "language": "nl", "language_name": "Nederlands"},
-    {"id": 1816, "abbreviation": "HSV",       "name": "Herziene Statenvertaling",        "language": "nl", "language_name": "Nederlands"},
-    {"id": 524,  "abbreviation": "BGT",       "name": "Bijbel in Gewone Taal",           "language": "nl", "language_name": "Nederlands"},
-    {"id": 278,  "abbreviation": "SV",        "name": "Statenvertaling",                 "language": "nl", "language_name": "Nederlands"},
+    {"id": 48,   "abbreviation": "NBG51",    "name": "NBG-vertaling 1951",               "language": "nl", "language_name": "Nederlands"},
+    {"id": 328,  "abbreviation": "NBV",      "name": "Nieuwe Bijbelvertaling",            "language": "nl", "language_name": "Nederlands"},
+    {"id": 1816, "abbreviation": "HSV",      "name": "Herziene Statenvertaling",         "language": "nl", "language_name": "Nederlands"},
+    {"id": 524,  "abbreviation": "BGT",      "name": "Bijbel in Gewone Taal",            "language": "nl", "language_name": "Nederlands"},
+    {"id": 278,  "abbreviation": "SV",       "name": "Statenvertaling",                  "language": "nl", "language_name": "Nederlands"},
     # German
-    {"id": 51,   "abbreviation": "LUTH1545",  "name": "Luther Bibel 1545",               "language": "de", "language_name": "Deutsch"},
-    {"id": 157,  "abbreviation": "ELB",       "name": "Elberfelder Bibel",               "language": "de", "language_name": "Deutsch"},
-    {"id": 1588, "abbreviation": "NGU-DE",    "name": "Neue Genfer Übersetzung",         "language": "de", "language_name": "Deutsch"},
-    {"id": 70,   "abbreviation": "SCH2000",   "name": "Schlachter 2000",                 "language": "de", "language_name": "Deutsch"},
+    {"id": 51,   "abbreviation": "LUTH1545", "name": "Luther Bibel 1545",                "language": "de", "language_name": "Deutsch"},
+    {"id": 157,  "abbreviation": "ELB",      "name": "Elberfelder Bibel",                "language": "de", "language_name": "Deutsch"},
+    {"id": 70,   "abbreviation": "SCH2000",  "name": "Schlachter 2000",                  "language": "de", "language_name": "Deutsch"},
     # French
-    {"id": 93,   "abbreviation": "LSG",       "name": "Louis Segond 1910",               "language": "fr", "language_name": "Français"},
-    {"id": 1462, "abbreviation": "BDS",       "name": "Bible du Semeur",                 "language": "fr", "language_name": "Français"},
-    {"id": 4096, "abbreviation": "NBS",       "name": "Nouvelle Bible Segond",           "language": "fr", "language_name": "Français"},
+    {"id": 93,   "abbreviation": "LSG",      "name": "Louis Segond 1910",                "language": "fr", "language_name": "Français"},
+    {"id": 1462, "abbreviation": "BDS",      "name": "Bible du Semeur",                  "language": "fr", "language_name": "Français"},
     # Spanish
-    {"id": 128,  "abbreviation": "RVR60",     "name": "Reina-Valera 1960",               "language": "es", "language_name": "Español"},
-    {"id": 149,  "abbreviation": "RVA",       "name": "Reina-Valera Actualizada",        "language": "es", "language_name": "Español"},
-    {"id": 503,  "abbreviation": "NVI",       "name": "Nueva Versión Internacional",     "language": "es", "language_name": "Español"},
+    {"id": 128,  "abbreviation": "RVR60",    "name": "Reina-Valera 1960",                "language": "es", "language_name": "Español"},
+    {"id": 503,  "abbreviation": "NVI",      "name": "Nueva Versión Internacional",      "language": "es", "language_name": "Español"},
     # Portuguese
-    {"id": 212,  "abbreviation": "ARC",       "name": "Almeida Revisada Corrigida",      "language": "pt", "language_name": "Português"},
-    {"id": 1608, "abbreviation": "NVT",       "name": "Nova Versão Transformadora",      "language": "pt", "language_name": "Português"},
+    {"id": 212,  "abbreviation": "ARC",      "name": "Almeida Revisada Corrigida",       "language": "pt", "language_name": "Português"},
     # Italian
-    {"id": 121,  "abbreviation": "CEI",       "name": "Conferenza Episcopale Italiana",  "language": "it", "language_name": "Italiano"},
-    {"id": 431,  "abbreviation": "NR2006",    "name": "Nuova Riveduta 2006",             "language": "it", "language_name": "Italiano"},
+    {"id": 431,  "abbreviation": "NR2006",   "name": "Nuova Riveduta 2006",              "language": "it", "language_name": "Italiano"},
     # Russian
-    {"id": 400,  "abbreviation": "SYNO",      "name": "Синодальный перевод",             "language": "ru", "language_name": "Русский"},
+    {"id": 400,  "abbreviation": "SYNO",     "name": "Синодальный перевод",              "language": "ru", "language_name": "Русский"},
     # Chinese Simplified
-    {"id": 1268, "abbreviation": "CNVS",      "name": "Chinese New Version (Simplified)","language": "zh", "language_name": "中文"},
+    {"id": 1268, "abbreviation": "CNVS",     "name": "Chinese New Version (Simplified)", "language": "zh", "language_name": "中文"},
     # Greek
-    {"id": 2097, "abbreviation": "SBLG",      "name": "SBL Greek New Testament",        "language": "el", "language_name": "Ελληνικά"},
+    {"id": 2097, "abbreviation": "SBLG",     "name": "SBL Greek New Testament",         "language": "el", "language_name": "Ελληνικά"},
     # Hebrew
-    {"id": 2310, "abbreviation": "WLC",       "name": "Westminster Leningrad Codex",     "language": "he", "language_name": "עברית"},
+    {"id": 2310, "abbreviation": "WLC",      "name": "Westminster Leningrad Codex",      "language": "he", "language_name": "עברית"},
     # Arabic
-    {"id": 3,    "abbreviation": "AVDB",      "name": "Arabic Bible",                   "language": "ar", "language_name": "العربية"},
+    {"id": 3,    "abbreviation": "AVDB",     "name": "Arabic Bible",                    "language": "ar", "language_name": "العربية"},
 ]
 
 
 # ---------------------------------------------------------------------------
 # USFM book code mappings
 # ---------------------------------------------------------------------------
-# Maps lowercased common names / abbreviations to USFM codes
 BOOK_NAME_TO_USFM: Dict[str, str] = {
     # Genesis
     "gen": "GEN", "genesis": "GEN", "gene": "GEN",
@@ -242,7 +233,6 @@ BOOK_NAME_TO_USFM: Dict[str, str] = {
     "opb": "REV", "openbaring": "REV",
 }
 
-# Human-readable book names (USFM code → English name)
 USFM_TO_BOOK_NAME: Dict[str, str] = {
     "GEN": "Genesis", "EXO": "Exodus", "LEV": "Leviticus", "NUM": "Numbers",
     "DEU": "Deuteronomy", "JOS": "Joshua", "JDG": "Judges", "RUT": "Ruth",
@@ -274,8 +264,8 @@ class BibleTranslation:
     id: int
     abbreviation: str
     name: str
-    language: str        # ISO 639-1 language code (e.g. "en", "nl")
-    language_name: str   # Human-readable language name
+    language: str
+    language_name: str
 
 
 @dataclass
@@ -288,10 +278,10 @@ class BibleVerse:
 @dataclass
 class BibleReference:
     """A parsed Bible reference."""
-    book_usfm: str      # USFM book code (e.g. "JHN")
+    book_usfm: str
     chapter: int
     verse_start: int
-    verse_end: Optional[int] = None  # None = single verse
+    verse_end: Optional[int] = None
 
     @property
     def book_name(self) -> str:
@@ -299,12 +289,19 @@ class BibleReference:
 
     @property
     def usfm_chapter(self) -> str:
-        """USFM reference for the chapter (e.g. 'JHN.3')."""
         return f"{self.book_usfm}.{self.chapter}"
 
     @property
+    def usfm_range(self) -> str:
+        """USFM range string for the Platform API (e.g. 'JHN.3.16-JHN.3.21')."""
+        start = f"{self.book_usfm}.{self.chapter}.{self.verse_start}"
+        if self.verse_end and self.verse_end != self.verse_start:
+            end = f"{self.book_usfm}.{self.chapter}.{self.verse_end}"
+            return f"{start}-{end}"
+        return start
+
+    @property
     def display_str(self) -> str:
-        """Human-readable reference string."""
         if self.verse_end and self.verse_end != self.verse_start:
             return f"{self.book_name} {self.chapter}:{self.verse_start}-{self.verse_end}"
         return f"{self.book_name} {self.chapter}:{self.verse_start}"
@@ -323,8 +320,6 @@ def parse_reference(reference_str: str) -> BibleReference:
       - "Psalm 23:1-6"
       - "1 Cor 13:1-13"
       - "Johannes 3:16"    (Dutch)
-      - "Ps 23:1-6"
-      - "Rev 22:1"
 
     Raises ValueError if the reference cannot be parsed.
     """
@@ -332,8 +327,6 @@ def parse_reference(reference_str: str) -> BibleReference:
     if not s:
         raise ValueError("Empty reference string")
 
-    # Pattern: optional digit prefix + book name + chapter:verse[-verse]
-    # Allows: "1 Corinthians", "2 Tim", "Song of Solomon", "1Co", etc.
     pattern = re.compile(
         r"^(\d\s*)?([A-Za-zÀ-öø-ÿëïüäöé]+(?:\s+[A-Za-zÀ-öø-ÿëïüäöé]+)*)"
         r"\s+(\d+)\s*[:.]\s*(\d+)(?:\s*[-–—]\s*(\d+))?$",
@@ -354,14 +347,11 @@ def parse_reference(reference_str: str) -> BibleReference:
     verse_end_str = m.group(5)
     verse_end = int(verse_end_str) if verse_end_str else None
 
-    # Build lookup key
     if digit_prefix:
-        # e.g. "1 Corinthians" → "1corinthians", "2 Tim" → "2tim"
         lookup_key = (digit_prefix + book_raw).replace(" ", "").lower()
     else:
         lookup_key = book_raw.replace(" ", "").lower()
 
-    # Try full key first, then progressively shorter prefixes
     usfm = None
     for key_candidate in _generate_lookup_candidates(lookup_key):
         if key_candidate in BOOK_NAME_TO_USFM:
@@ -388,12 +378,9 @@ def parse_reference(reference_str: str) -> BibleReference:
 
 
 def _generate_lookup_candidates(key: str) -> List[str]:
-    """Generate lookup key candidates from most specific to least specific."""
     candidates = [key]
-    # Try without trailing 's' (e.g. "psalms" → "psalm")
     if key.endswith("s") and len(key) > 3:
         candidates.append(key[:-1])
-    # Try first 4 chars if key is long enough
     if len(key) >= 4:
         candidates.append(key[:4])
     if len(key) >= 3:
@@ -406,15 +393,25 @@ def _generate_lookup_candidates(key: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 class BibleService:
-    """Fetches Bible texts from YouVersion (bible.com) API.
+    """Fetches Bible texts from the YouVersion Platform API.
 
-    Uses the unofficial nodejs.bible.com chapter API.
-    Caches fetched chapters to avoid redundant network requests.
+    Requires a free API key from https://developers.youversion.com.
+    Set api_key before calling get_verses(); without a key the API will
+    return 401 Unauthorized errors.
     """
 
-    def __init__(self) -> None:
-        self._chapter_cache: Dict[str, List[BibleVerse]] = {}
-        self._translations_cache: Optional[List[BibleTranslation]] = None
+    def __init__(self, api_key: str = "") -> None:
+        self._api_key = api_key
+        self._passage_cache: Dict[str, List[BibleVerse]] = {}
+
+    def set_api_key(self, api_key: str) -> None:
+        """Update the API key and clear the cache."""
+        if api_key != self._api_key:
+            self._api_key = api_key
+            self._passage_cache.clear()
+
+    def has_api_key(self) -> bool:
+        return bool(self._api_key and self._api_key.strip())
 
     # ------------------------------------------------------------------
     # Public API
@@ -436,45 +433,80 @@ class BibleService:
     def fetch_translations_for_language(
         self, language_tag: str
     ) -> List[BibleTranslation]:
-        """Fetch available translations for a language tag from YouVersion.
+        """Fetch available translations for a language from the Platform API.
 
-        Falls back to built-in catalog on error.
-
-        Args:
-            language_tag: ISO 639-1 language code (e.g. "en", "nl").
-
-        Returns:
-            List of BibleTranslation objects.
+        Uses GET /v1/bibles?language_tag={lang}&page_size=100.
+        Falls back to built-in catalog on error or missing API key.
         """
-        try:
-            resp = requests.get(
-                YOUVERSION_VERSIONS_URL,
-                params={"language_tag": language_tag, "type": "all"},
-                headers=_HEADERS,
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        if not self.has_api_key():
+            return [
+                t for t in self.get_builtin_translations()
+                if t.language == language_tag
+            ]
 
-            versions = data if isinstance(data, list) else data.get("versions", [])
+        try:
             results = []
-            for v in versions:
-                if not isinstance(v, dict):
-                    continue
-                results.append(
-                    BibleTranslation(
-                        id=int(v.get("id", 0)),
-                        abbreviation=v.get("abbreviation", ""),
-                        name=v.get("title", v.get("local_title", "")),
-                        language=language_tag,
-                        language_name=v.get("language_tag", language_tag),
-                    )
+            page_token: Optional[str] = None
+
+            while True:
+                params: dict = {
+                    "language_tag": language_tag,
+                    "page_size": 100,
+                }
+                if page_token:
+                    params["page_token"] = page_token
+
+                resp = requests.get(
+                    f"{YOUVERSION_API_BASE}/bibles",
+                    headers=self._get_headers(),
+                    params=params,
+                    timeout=REQUEST_TIMEOUT,
                 )
+                resp.raise_for_status()
+                data = resp.json()
+
+                bibles = data.get("data", data) if isinstance(data, dict) else data
+                if isinstance(bibles, list):
+                    for b in bibles:
+                        if not isinstance(b, dict):
+                            continue
+                        lang_info = b.get("language", {})
+                        lang_code = (
+                            lang_info.get("tag", language_tag)
+                            if isinstance(lang_info, dict)
+                            else language_tag
+                        )
+                        lang_name = (
+                            lang_info.get("name", language_tag)
+                            if isinstance(lang_info, dict)
+                            else language_tag
+                        )
+                        results.append(
+                            BibleTranslation(
+                                id=int(b.get("id", 0)),
+                                abbreviation=b.get("abbreviation", ""),
+                                name=b.get("title", b.get("local_title", "")),
+                                language=lang_code,
+                                language_name=lang_name,
+                            )
+                        )
+
+                # Pagination
+                page_token = data.get("next_page_token") if isinstance(data, dict) else None
+                if not page_token:
+                    break
+
+            logger.info(
+                "Fetched %d translations for language '%s' from Platform API",
+                len(results),
+                language_tag,
+            )
             return results
+
         except Exception as exc:
             logger.warning(
-                "Failed to fetch translations from YouVersion for language '%s': %s. "
-                "Using built-in catalog.",
+                "Failed to fetch translations from Platform API for '%s': %s. "
+                "Falling back to built-in catalog.",
                 language_tag,
                 exc,
             )
@@ -488,40 +520,29 @@ class BibleService:
         reference: BibleReference,
         version_id: int,
     ) -> List[BibleVerse]:
-        """Fetch verses for a Bible reference and translation.
+        """Fetch verses for a reference and translation using the Platform API.
 
-        Retrieves the whole chapter and returns only the requested verse range.
-        Results are cached by (version_id, usfm_chapter).
-
-        Args:
-            reference: Parsed BibleReference.
-            version_id: YouVersion numeric version ID.
-
-        Returns:
-            List of BibleVerse objects (verse_num, text).
+        Results are cached by (version_id, usfm_range).
 
         Raises:
             requests.RequestException: On network failure.
-            ValueError: If the requested verse range is not in the response.
+            ValueError: If the API key is missing or response is unexpected.
         """
-        cache_key = f"{version_id}:{reference.usfm_chapter}"
-        if cache_key not in self._chapter_cache:
-            self._chapter_cache[cache_key] = self._fetch_chapter(
-                version_id, reference.usfm_chapter
+        if not self.has_api_key():
+            raise ValueError(
+                "No YouVersion API key configured. "
+                "Please add your API key in Settings → Bible Text Slides. "
+                "Get a free key at https://developers.youversion.com"
             )
 
-        all_verses = self._chapter_cache[cache_key]
-        return self._filter_verses(all_verses, reference.verse_start, reference.verse_end)
+        usfm_range = reference.usfm_range
+        cache_key = f"{version_id}:{usfm_range}"
+        if cache_key not in self._passage_cache:
+            self._passage_cache[cache_key] = self._fetch_passage(version_id, usfm_range, reference)
+        return self._passage_cache[cache_key]
 
-    def get_youversion_url(
-        self,
-        reference: BibleReference,
-        version_id: int,
-    ) -> str:
-        """Return the YouVersion share URL for the full reference.
-
-        Example: https://www.bible.com/bible/111/JHN.3.16-21.NIV
-        """
+    def get_youversion_url(self, reference: BibleReference, version_id: int) -> str:
+        """Return the bible.com share URL for the reference."""
         usfm = reference.usfm_chapter
         usfm_with_verses = f"{usfm}.{reference.verse_start}"
         if reference.verse_end and reference.verse_end != reference.verse_start:
@@ -529,120 +550,98 @@ class BibleService:
         return f"{YOUVERSION_SHARE_BASE}/{version_id}/{usfm_with_verses}"
 
     def clear_cache(self) -> None:
-        """Clear the verse cache."""
-        self._chapter_cache.clear()
+        self._passage_cache.clear()
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _fetch_chapter(self, version_id: int, usfm_chapter: str) -> List[BibleVerse]:
-        """Fetch all verses for a chapter from the YouVersion API.
+    def _get_headers(self) -> dict:
+        headers = dict(_HEADERS)
+        if self._api_key:
+            headers["X-YVP-App-Key"] = self._api_key.strip()
+        return headers
 
-        The nodejs.bible.com API returns JSON with a 'items' or 'verses' array.
-        """
-        url = f"{YOUVERSION_API_BASE}/chapter/{version_id}/{usfm_chapter}.json"
-        logger.info("Fetching Bible chapter: %s (version %s)", usfm_chapter, version_id)
-
-        resp = requests.get(url, headers=_HEADERS, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-
-        data = resp.json()
-        return self._parse_chapter_response(data, usfm_chapter)
-
-    def _parse_chapter_response(
-        self, data: dict, usfm_chapter: str
+    def _fetch_passage(
+        self,
+        version_id: int,
+        usfm_range: str,
+        reference: BibleReference,
     ) -> List[BibleVerse]:
-        """Parse a YouVersion chapter API response into a list of BibleVerse."""
+        """Fetch a passage from the YouVersion Platform API."""
+        url = f"{YOUVERSION_API_BASE}/bibles/{version_id}/passages/{usfm_range}"
+        logger.info("Fetching passage: %s (version %s)", usfm_range, version_id)
+
+        resp = requests.get(url, headers=self._get_headers(), timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        return self._parse_passage_response(data, usfm_range, reference)
+
+    def _parse_passage_response(
+        self,
+        data: dict,
+        usfm_range: str,
+        reference: BibleReference,
+    ) -> List[BibleVerse]:
+        """Parse the Platform API passage response into a list of BibleVerse.
+
+        The Platform API may return verses nested in data.content, data.verses,
+        or as a flat text block.  We try each format in order.
+        """
+        # Unwrap outer "data" envelope if present
+        payload = data.get("data", data) if isinstance(data, dict) else data
+
         verses: List[BibleVerse] = []
 
-        # Format A: {"items": [{"type": "verse", "verseId": "JHN.3.1", "content": "..."}]}
-        if "items" in data:
-            for item in data["items"]:
-                if not isinstance(item, dict):
-                    continue
-                if item.get("type") != "verse":
-                    continue
-                verse_id = item.get("verseId", item.get("verse_id", ""))
-                verse_num = self._extract_verse_num(verse_id)
-                if verse_num is None:
-                    # Try 'human' label
-                    try:
-                        verse_num = int(item.get("human", item.get("label", "0")))
-                    except (ValueError, TypeError):
+        if isinstance(payload, dict):
+            # Format A: {content: [{type:"verse", verse_id:"JHN.3.16", content:"..."}]}
+            content_list = payload.get("content", [])
+            if isinstance(content_list, list):
+                for item in content_list:
+                    if not isinstance(item, dict):
                         continue
-                text = _strip_html(_clean_verse_text(item.get("content", "")))
-                if text:
-                    verses.append(BibleVerse(verse_num=verse_num, text=text))
+                    if item.get("type") == "verse":
+                        verse_id = item.get("verse_id", item.get("verseId", ""))
+                        verse_num = _extract_verse_num_from_id(verse_id)
+                        text = _clean_text(item.get("content", item.get("text", "")))
+                        if verse_num is not None and text:
+                            verses.append(BibleVerse(verse_num=verse_num, text=text))
 
-        # Format B: {"verses": [{"id": "JHN.3.1", "verse": 1, "text": "..."}]}
-        elif "verses" in data:
-            for item in data["verses"]:
-                if not isinstance(item, dict):
-                    continue
-                verse_num = item.get("verse", item.get("verse_num"))
-                if verse_num is None:
-                    verse_id = item.get("id", item.get("verseId", ""))
-                    verse_num = self._extract_verse_num(verse_id)
-                if verse_num is None:
-                    continue
-                try:
-                    verse_num = int(verse_num)
-                except (ValueError, TypeError):
-                    continue
-                text = _strip_html(_clean_verse_text(item.get("text", item.get("content", ""))))
-                if text:
-                    verses.append(BibleVerse(verse_num=verse_num, text=text))
+            # Format B: {verses: [{verse_id:"JHN.3.16", text:"..."}]}
+            if not verses:
+                verse_list = payload.get("verses", [])
+                if isinstance(verse_list, list):
+                    for item in verse_list:
+                        if not isinstance(item, dict):
+                            continue
+                        verse_id = item.get("verse_id", item.get("verseId", item.get("id", "")))
+                        verse_num = (
+                            item.get("verse", item.get("verse_num"))
+                            or _extract_verse_num_from_id(str(verse_id))
+                        )
+                        try:
+                            verse_num = int(verse_num) if verse_num is not None else None
+                        except (ValueError, TypeError):
+                            verse_num = None
+                        text = _clean_text(item.get("text", item.get("content", "")))
+                        if verse_num is not None and text:
+                            verses.append(BibleVerse(verse_num=verse_num, text=text))
 
-        # Format C: raw list of verse objects
-        elif isinstance(data, list):
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-                verse_num = item.get("verse", item.get("verse_num", item.get("number")))
-                if verse_num is None:
-                    continue
-                try:
-                    verse_num = int(verse_num)
-                except (ValueError, TypeError):
-                    continue
-                text = _strip_html(_clean_verse_text(item.get("text", item.get("content", ""))))
-                if text:
-                    verses.append(BibleVerse(verse_num=verse_num, text=text))
+            # Format C: flat text block — split on embedded verse numbers
+            if not verses:
+                raw_text = payload.get("content", "")
+                if isinstance(raw_text, str) and raw_text.strip():
+                    verses = _split_text_into_verses(raw_text, reference)
 
         if not verses:
             logger.warning(
-                "No verses parsed for chapter '%s'. Response keys: %s",
-                usfm_chapter,
-                list(data.keys()) if isinstance(data, dict) else "list",
+                "No verses parsed for %s. Response keys: %s",
+                usfm_range,
+                list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__,
             )
 
-        # Sort by verse number in case they come out of order
         verses.sort(key=lambda v: v.verse_num)
         return verses
-
-    @staticmethod
-    def _extract_verse_num(verse_id: str) -> Optional[int]:
-        """Extract verse number from a USFM verse ID like 'JHN.3.16'."""
-        if not verse_id:
-            return None
-        parts = str(verse_id).split(".")
-        if len(parts) >= 3:
-            try:
-                return int(parts[-1])
-            except ValueError:
-                pass
-        return None
-
-    @staticmethod
-    def _filter_verses(
-        all_verses: List[BibleVerse],
-        verse_start: int,
-        verse_end: Optional[int],
-    ) -> List[BibleVerse]:
-        """Filter verse list to the requested range."""
-        end = verse_end if verse_end is not None else verse_start
-        return [v for v in all_verses if verse_start <= v.verse_num <= end]
 
 
 # ---------------------------------------------------------------------------
@@ -653,17 +652,61 @@ _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
-def _strip_html(text: str) -> str:
-    """Remove HTML tags and normalize whitespace."""
+def _clean_text(text: str) -> str:
+    """Strip HTML tags, normalize whitespace, and remove leading verse numbers."""
     text = _HTML_TAG_RE.sub(" ", text)
     text = _WHITESPACE_RE.sub(" ", text)
+    text = text.strip()
+    # Remove leading verse number like "16 " or "(16) "
+    text = re.sub(r"^\(?\d+\)?\s+", "", text)
     return text.strip()
 
 
-def _clean_verse_text(text: str) -> str:
-    """Remove leading verse numbers (e.g. '16 For God...') from YouVersion output."""
-    # Some responses include the verse number at the start – strip it
-    text = text.strip()
-    # Remove patterns like "16 " or "(16) " at the start
-    text = re.sub(r"^\d+\s+", "", text)
-    return text
+def _extract_verse_num_from_id(verse_id: str) -> Optional[int]:
+    """Extract verse number from a USFM ID like 'JHN.3.16'."""
+    if not verse_id:
+        return None
+    parts = str(verse_id).split(".")
+    if len(parts) >= 3:
+        try:
+            return int(parts[-1])
+        except ValueError:
+            pass
+    return None
+
+
+def _split_text_into_verses(text: str, reference: BibleReference) -> List[BibleVerse]:
+    """Split a flat passage text block into individual verses.
+
+    Looks for patterns like '[16]', '16 ', '(16)' at the start of verse segments.
+    If no verse markers are found, returns the whole text as a single verse starting
+    at verse_start.
+    """
+    # Try splitting on patterns like [16] or (16)
+    parts = re.split(r"\[(\d+)\]|\((\d+)\)", text)
+    if len(parts) > 1:
+        verses = []
+        # parts alternates: text, group1, group2, text, group1, group2, ...
+        i = 0
+        while i < len(parts):
+            pre_text = parts[i].strip()
+            if i + 2 < len(parts):
+                num_str = parts[i + 1] or parts[i + 2]
+                try:
+                    verse_num = int(num_str)
+                    verse_text = parts[i + 3].strip() if i + 3 < len(parts) else ""
+                    if verse_text:
+                        verses.append(BibleVerse(verse_num=verse_num, text=_clean_text(verse_text)))
+                    i += 4
+                    continue
+                except (ValueError, TypeError):
+                    pass
+            i += 1
+        if verses:
+            return verses
+
+    # Fallback: return as single verse at verse_start
+    cleaned = _clean_text(text)
+    if cleaned:
+        return [BibleVerse(verse_num=reference.verse_start, text=cleaned)]
+    return []

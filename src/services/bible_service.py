@@ -434,10 +434,7 @@ class BibleService:
     def get_verses_multi(
         self, references: List[BibleReference], version_id: int
     ) -> List[BibleVerse]:
-        """Fetch verses for multiple references, renumbering sequentially.
-
-        For comma-separated reference inputs.
-        """
+        """Fetch verses for multiple references, renumbering sequentially."""
         result: List[BibleVerse] = []
         seq = 1
         for ref in references:
@@ -557,7 +554,7 @@ class BibleService:
         For multi-verse passages the content includes inline verse numbers:
           "16 For God so loved... 17 For God did not send..."
 
-        We try three parse strategies in order:
+        Parse strategies in order:
           1. Structured verse array in content/verses/items
           2. Split flat content text on inline verse numbers
           3. Return the whole content as a single verse block
@@ -601,7 +598,6 @@ class BibleService:
         """Try to extract verse objects from a structured response."""
         verses: List[BibleVerse] = []
 
-        # content as list
         content_list = payload.get("content", payload.get("items", payload.get("verses", [])))
         if not isinstance(content_list, list):
             return []
@@ -626,7 +622,6 @@ class BibleService:
         if not verses:
             return []
 
-        # Filter to requested range
         return _filter_by_range(verses, verse_start, verse_end, whole_chapter)
 
     def _fetch_bibles_list(self, language_tag: str) -> List[BibleTranslation]:
@@ -635,7 +630,7 @@ class BibleService:
         page_token: Optional[str] = None
 
         while True:
-            # Try without page_size first (it caused 422); add next_page_token for pagination
+            # Omit page_size (causes 422); use only language_tag
             params: dict = {"language_tag": language_tag}
             if page_token:
                 params["page_token"] = page_token
@@ -649,10 +644,12 @@ class BibleService:
                 )
                 resp.raise_for_status()
             except requests.HTTPError as exc:
-                # If language_tag filter causes 422, try without it
+                # If language_tag filter causes 422, try fetching all and filtering client-side
                 if exc.response is not None and exc.response.status_code == 422 and "language_tag" in params:
                     logger.warning(
-                        "language_tag filter returned 422; fetching all bibles and filtering client-side"
+                        "language_tag filter returned 422 (%s); "
+                        "fetching all bibles and filtering client-side",
+                        exc.response.text[:200],
                     )
                     return self._fetch_bibles_list_all(language_tag)
                 raise
@@ -723,8 +720,8 @@ class BibleService:
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
-# Verse number at start of text or embedded: "16 text", "(16) text", "[16] text"
-_INLINE_VERSE_RE = re.compile(r"(?<!\w)(\d{1,3})(?:\s|(?=\[|\())")
+# Verse number embedded inline: "16 text", not part of a longer word
+_INLINE_VERSE_RE = re.compile(r"(?<!\w)(\d{1,3})(?=\s)")
 
 
 def _clean_text(text: str) -> str:
@@ -749,21 +746,14 @@ def _split_content_on_verse_nums(
     verse_end: Optional[int],
     whole_chapter: bool,
 ) -> List[BibleVerse]:
-    """Split a flat content string on inline verse numbers.
-
-    Looks for patterns like "16 For God..." and splits the text into verses.
-    Falls back to an empty list if no clear verse markers are found.
-    """
-    # Find all positions of potential verse numbers
+    """Split a flat content string on inline verse numbers."""
     matches = list(_INLINE_VERSE_RE.finditer(content))
     if not matches:
         return []
 
-    # Filter to plausible verse numbers in the requested range
     end = verse_end if not whole_chapter and verse_end is not None else 999
     relevant = [m for m in matches if verse_start <= int(m.group(1)) <= end]
     if not relevant:
-        # Try without range filter – content might use different numbering
         relevant = [m for m in matches if 1 <= int(m.group(1)) <= 200]
         if len(relevant) < 2:
             return []

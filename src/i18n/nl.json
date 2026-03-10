@@ -176,7 +176,7 @@
   "dialog.bible.title": "Bijbeltekst dia's toevoegen",
   "dialog.bible.reference_group": "Bijbelverwijzing",
   "dialog.bible.reference_label": "Verwijzing:",
-  "dialog.bible.reference_placeholder": "bijv. Johannes 3:16-21 of Psalm 23:1-6",
+  "dialog.bible.reference_placeholder": "bijv. Johannes 3:16-21 · Psalm 46 · Matteüs 1:10-2:4 · Psalm 1:1, Openbaring 3:2",
   "dialog.bible.translations_group": "Vertalingen (maximaal 6)",
   "dialog.bible.available_translations": "Beschikbare vertalingen",
   "dialog.bible.selected_translations": "Geselecteerd (versleep om te ordenen)",

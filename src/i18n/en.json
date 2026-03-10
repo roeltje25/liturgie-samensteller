@@ -176,7 +176,7 @@
   "dialog.bible.title": "Add Bible Text Slides",
   "dialog.bible.reference_group": "Bible Reference",
   "dialog.bible.reference_label": "Reference:",
-  "dialog.bible.reference_placeholder": "e.g. John 3:16-21 or Psalm 23:1-6",
+  "dialog.bible.reference_placeholder": "e.g. John 3:16-21 · Psalm 46 · Matt 1:10-2:4 · Psalm 1:1, Rev 3:2, John 3:16",
   "dialog.bible.translations_group": "Translations (select up to 6)",
   "dialog.bible.available_translations": "Available translations",
   "dialog.bible.selected_translations": "Selected (drag to reorder)",

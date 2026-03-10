@@ -54,6 +54,7 @@ from ..services.bible_service import (
     BibleVerse,
     BUILTIN_TRANSLATIONS,
     parse_reference,
+    parse_references,
 )
 from ..services.bible_slide_service import BibleSlideConfig, BibleSlideService
 from ..services.google_translate_service import (
@@ -106,17 +107,22 @@ class _FetchPreviewWorker(QThread):
         try:
             for col_idx, trans, ref_str in self._slots:
                 try:
-                    ref = parse_reference(ref_str)
-                    verses = self._svc.get_verses(ref, trans.id)
+                    refs = parse_references(ref_str)
+                    if len(refs) == 1:
+                        verses = self._svc.get_verses(refs[0], trans.id)
+                    else:
+                        verses = self._svc.get_verses_multi(refs, trans.id)
                     texts = [
                         f"{v.verse_num}\u00a0{v.text}" if v.verse_num else v.text
                         for v in verses
                     ]
                 except Exception as exc:
+                    logger.error("Preview fetch error for %s: %s", trans.abbreviation, exc, exc_info=True)
                     texts = [f"(Error: {exc})"]
                 self.column_ready.emit(col_idx, trans.name, trans.language, texts)
             self.finished.emit()
         except Exception as exc:
+            logger.error("Preview worker error: %s", exc, exc_info=True)
             self.error.emit(str(exc))
 
 
@@ -555,8 +561,9 @@ class BiblePickerDialog(QDialog):
             self.reference_status.setText("")
             return
         try:
-            ref = parse_reference(text)
-            self.reference_status.setText(f"✓ {ref.display_str}")
+            refs = parse_references(text)
+            label = " | ".join(r.display_str for r in refs)
+            self.reference_status.setText(f"✓ {label}")
             self.reference_status.setStyleSheet("color: green; font-size: 11px;")
         except ValueError as exc:
             self.reference_status.setText(str(exc))
@@ -664,7 +671,7 @@ class BiblePickerDialog(QDialog):
             QMessageBox.warning(self, tr("dialog.bible.title"), tr("dialog.bible.error.no_reference"))
             return
         try:
-            parse_reference(reference)
+            parse_references(reference)
         except ValueError as exc:
             QMessageBox.warning(self, tr("dialog.bible.title"), str(exc))
             return
@@ -822,7 +829,7 @@ class BiblePickerDialog(QDialog):
             QMessageBox.warning(self, tr("dialog.bible.title"), tr("dialog.bible.error.no_reference"))
             return
         try:
-            parse_reference(reference)
+            parse_references(reference)
         except ValueError as exc:
             QMessageBox.warning(self, tr("dialog.bible.title"), str(exc))
             return

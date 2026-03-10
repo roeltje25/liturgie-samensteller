@@ -31,6 +31,7 @@ from .bible_service import (
     BibleTranslation,
     BibleVerse,
     parse_reference,
+    parse_references,
 )
 from .google_translate_service import is_rtl
 
@@ -139,11 +140,15 @@ class BibleSlideService:
         translation_ids = translation_ids[:6]
         reference_overrides = reference_overrides or {}
 
-        # 1. Parse the main reference
-        main_ref = parse_reference(reference_str)
+        # 1. Parse the main reference (supports comma-separated multiple refs)
+        main_refs = parse_references(reference_str)
+        is_multi_ref = len(main_refs) > 1
+        display_label = (
+            reference_str.strip() if is_multi_ref else main_refs[0].display_str
+        )
         logger.info(
             "Creating Bible slides for: %s, translations: %s",
-            main_ref.display_str, translation_ids,
+            display_label, translation_ids,
         )
 
         # 2. Build translation catalog lookup
@@ -157,9 +162,14 @@ class BibleSlideService:
                 id=vid, abbreviation=str(vid), name=str(vid), language="", language_name=""
             ))
             override_str = reference_overrides.get(vid)
-            ref = parse_reference(override_str) if override_str else main_ref
             try:
-                verses = self._bible.get_verses(ref, vid)
+                if override_str:
+                    override_refs = parse_references(override_str)
+                    verses = self._bible.get_verses_multi(override_refs, vid)
+                elif is_multi_ref:
+                    verses = self._bible.get_verses_multi(main_refs, vid)
+                else:
+                    verses = self._bible.get_verses(main_refs[0], vid)
                 if not verses:
                     logger.warning("No verses for version %s", vid)
                     verses = [BibleVerse(verse_num=0, text="(No text available)")]
@@ -173,11 +183,14 @@ class BibleSlideService:
                 reference_override=override_str,
             ))
 
-        # 4. QR URL (use first translation, main ref)
-        qr_url = self._bible.get_youversion_url(main_ref, translation_ids[0])
+        # 4. QR URL (use first translation, first reference)
+        qr_url = self._bible.get_youversion_url(main_refs[0], translation_ids[0])
+
+        # Use a synthetic BibleReference for the slide title
+        title_ref = main_refs[0]
 
         # 5. Build slides
-        return self._build_presentation(main_ref, slots, qr_url, config)
+        return self._build_presentation(title_ref, slots, qr_url, config, display_label)
 
     def fetch_verses_for_slot(
         self,
@@ -185,8 +198,10 @@ class BibleSlideService:
         reference_str: str,
     ) -> List[BibleVerse]:
         """Fetch verses for a single translation, used by the preview pane."""
-        ref = parse_reference(reference_str)
-        return self._bible.get_verses(ref, translation_id)
+        refs = parse_references(reference_str)
+        if len(refs) == 1:
+            return self._bible.get_verses(refs[0], translation_id)
+        return self._bible.get_verses_multi(refs, translation_id)
 
     # ------------------------------------------------------------------
     # Private – presentation builder
@@ -198,6 +213,7 @@ class BibleSlideService:
         slots: List[TranslationSlot],
         qr_url: str,
         config: BibleSlideConfig,
+        display_label: Optional[str] = None,
     ) -> str:
         prs = Presentation()
         prs.slide_width = Inches(config.slide_width)
@@ -239,7 +255,7 @@ class BibleSlideService:
         qr_image: Optional[BytesIO] = _generate_qr(qr_url)
 
         blank_layout = prs.slide_layouts[6]
-        slide_label = main_ref.display_str
+        slide_label = display_label if display_label else main_ref.display_str
 
         for group_idx, group_rows in enumerate(row_groups):
             slide = prs.slides.add_slide(blank_layout)

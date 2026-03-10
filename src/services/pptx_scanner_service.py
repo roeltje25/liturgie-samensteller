@@ -50,6 +50,9 @@ class PptxScanResult:
     filepath: str
     service_date: Optional[date]
     songs: List[str] = field(default_factory=list)
+    # Candidate titles from Phase 3 (top-positioned non-placeholder text + lyric body).
+    # Only those confirmed against the song library are promoted to song_classifications.
+    phase3_candidates: List[str] = field(default_factory=list)
     song_classifications: List[SongClassification] = field(default_factory=list)
     error: Optional[str] = None
 
@@ -88,11 +91,13 @@ class PptxScannerService:
             from pptx import Presentation  # lazy import – keeps startup fast
             prs = Presentation(filepath)
             songs = self.extract_songs_from_pptx(prs)
+            phase3 = self._find_phase3_candidates(prs)
             return PptxScanResult(
                 filename=filename,
                 filepath=filepath,
                 service_date=service_date,
                 songs=songs,
+                phase3_candidates=phase3,
             )
         except Exception as exc:
             logger.error("Error scanning %s: %s", filepath, exc, exc_info=True)
@@ -112,23 +117,55 @@ class PptxScannerService:
         songs: List[str],
         songs_path: str,
         algemeen_path: str,
+        user_liturgy_items: Optional[List[str]] = None,
+        phase3_candidates: Optional[List[str]] = None,
     ) -> List[SongClassification]:
         """Classify each detected title against the Liederen and Algemeen folders.
 
         Args:
-            songs: List of detected song title strings.
+            songs: List of detected song title strings (from Phase 1 & 2).
             songs_path: Absolute path to the Liederen root folder.
             algemeen_path: Absolute path to the Algemeen folder.
+            user_liturgy_items: Titles explicitly marked as liturgy items by the user.
+                These are excluded with highest priority regardless of library match.
+            phase3_candidates: Top-positioned non-placeholder title candidates.
+                Only those confirmed by the library are appended to the result.
 
         Returns:
-            A :class:`SongClassification` for every title in *songs*.
+            A :class:`SongClassification` for every included title.
         """
         liederen = self._collect_liederen_names(songs_path)
         algemeen = self._collect_algemeen_names(algemeen_path)
-        return [
-            SongClassification(t, *self._classify_title(t, liederen, algemeen))
+        user_excluded = self._collect_user_liturgy(user_liturgy_items or [])
+
+        classifications = [
+            SongClassification(t, *self._classify_title(t, liederen, algemeen, user_excluded))
             for t in songs
         ]
+
+        # Phase 3: add top-positioned candidates only when confirmed by the library
+        if phase3_candidates:
+            existing_lower = {c.title.lower() for c in classifications}
+            for title in phase3_candidates:
+                if title.lower() in existing_lower:
+                    continue  # already found by Phase 1 / 2
+                status, path = self._classify_title(title, liederen, algemeen, user_excluded)
+                if status == SongStatus.CONFIRMED:
+                    classifications.append(SongClassification(title, status, path))
+                    existing_lower.add(title.lower())
+                    logger.debug("Phase 3 confirmed: %s → %s", title, path)
+
+        return classifications
+
+    @staticmethod
+    def _collect_user_liturgy(user_liturgy_items: List[str]) -> Set[str]:
+        """Return a set of normalized user-marked liturgy titles for fast lookup."""
+        result: Set[str] = set()
+        for t in user_liturgy_items:
+            norm = PptxScannerService._normalize(t)
+            if norm:
+                result.add(norm)
+        return result
 
     def _collect_liederen_names(self, songs_path: str) -> Dict[str, str]:
         """Walk the Liederen root and return {normalized_folder_name: rel_path}.
@@ -172,11 +209,22 @@ class PptxScannerService:
         title: str,
         liederen: Dict[str, str],
         algemeen: Set[str],
+        user_excluded: Optional[Set[str]] = None,
     ) -> Tuple[SongStatus, Optional[str]]:
         """Classify *title* and return *(status, library_folder)*."""
         norm_title = self._normalize(title)
         title_words = set(norm_title.split())
         significant_title = {w for w in title_words if len(w) > 2}
+
+        # Step 0 — User-curated liturgy items (highest priority)
+        if user_excluded:
+            if norm_title in user_excluded:
+                return (SongStatus.EXCLUDED, None)
+            # Also fuzzy-match user exclusions so "Vragen en antwoorden" matches
+            # a user entry of "Vraag en antwoord"
+            for excluded_norm in user_excluded:
+                if self._fuzzy_match(norm_title, excluded_norm) >= 0.80:
+                    return (SongStatus.EXCLUDED, None)
 
         # Step 1 — Algemeen check (exclusion)
         for alg_name in algemeen:
@@ -193,6 +241,10 @@ class PptxScannerService:
             if len(significant_title) >= 2:
                 if all(w in alg_words for w in significant_title):
                     return (SongStatus.EXCLUDED, None)
+
+            # Fuzzy: catch morphological variants, e.g. "Vragen en antwoorden" ~ "Vraag en antwoord"
+            if self._fuzzy_match(norm_title, alg_name) >= 0.70:
+                return (SongStatus.EXCLUDED, None)
 
         # Step 2 — Liederen check (confirmation)
         best_score = 0.0
@@ -292,6 +344,86 @@ class PptxScannerService:
             return date(year, month, day)
         except ValueError:
             return None
+
+    # ------------------------------------------------------------------
+    # Phase 3 — top-positioned non-placeholder title detection
+    # ------------------------------------------------------------------
+
+    def _find_phase3_candidates(self, prs) -> List[str]:
+        """Collect unique candidate titles from slides that have a small top/top-left
+        non-placeholder text box AND a substantial body of text (likely lyrics).
+
+        These candidates must be confirmed against the song library before use; see
+        :meth:`classify_songs`.
+        """
+        try:
+            slide_height = prs.slide_height or 1
+        except Exception:
+            slide_height = 1
+
+        seen: set = set()
+        candidates: List[str] = []
+        for slide in prs.slides:
+            title = self._get_topleft_nonph_title(slide, slide_height)
+            if title and title.lower() not in seen:
+                seen.add(title.lower())
+                candidates.append(title)
+        return candidates
+
+    def _get_topleft_nonph_title(self, slide, slide_height: int) -> Optional[str]:
+        """Return a short, top-positioned non-ph0 text from *slide* when the slide
+        also has long body content (lyrics), else ``None``.
+
+        A candidate shape must:
+        - not be a ``ph=0`` placeholder (handled by Phase 2)
+        - have text ≤ 60 chars that passes ``_is_title_candidate``
+        - be positioned in the top 30 % of the slide
+        The slide must also contain at least one text shape with > 40 chars.
+        """
+        has_long_text = False
+        candidates: List[Tuple[str, int]] = []  # (first_line, top_emu)
+
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+
+            # Skip ph=0 placeholders (Phase 2 already handles these)
+            try:
+                if shape.placeholder_format is not None and shape.placeholder_format.idx == 0:
+                    continue
+            except Exception:
+                pass
+
+            text = shape.text.strip()
+            if not text:
+                continue
+
+            if len(text) > 40:
+                has_long_text = True
+                continue
+
+            # Short text — check vertical position
+            try:
+                top_emu = shape.top
+                if top_emu is None:
+                    continue
+                top_ratio = top_emu / slide_height
+            except (AttributeError, TypeError):
+                continue
+
+            if top_ratio > 0.30:
+                continue
+
+            first_line = self._clean_title(text)
+            if first_line and self._is_title_candidate(first_line) and len(first_line) <= 60:
+                candidates.append((first_line, top_emu))
+
+        if not has_long_text or not candidates:
+            return None
+
+        # Return the topmost (smallest top_emu) candidate
+        candidates.sort(key=lambda x: x[1])
+        return candidates[0][0]
 
     # ------------------------------------------------------------------
     # Song extraction

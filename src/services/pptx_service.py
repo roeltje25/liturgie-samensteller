@@ -180,6 +180,27 @@ class PptxService:
                 logger.error(f"Failed to create stub presentation: {e}", exc_info=True)
                 raise
 
+    @staticmethod
+    def _get_short_path(long_path: str) -> str:
+        """Convert a long Windows path to its 8.3 short form.
+
+        Short paths are always ASCII-safe, which prevents encoding issues when
+        embedding paths as string literals in a VBScript file that cscript.exe
+        reads using the system ANSI code page.  Falls back to the original path
+        if the API is unavailable (non-Windows or ctypes error).
+        """
+        if os.name != 'nt':
+            return long_path
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(32767)
+            result = ctypes.windll.kernel32.GetShortPathNameW(long_path, buf, 32767)
+            if result:
+                return buf.value
+        except Exception:
+            pass
+        return long_path
+
     def _merge_with_vbscript(
         self,
         slides_to_copy: List[Tuple[str, List[int]]],
@@ -195,7 +216,7 @@ class PptxService:
         section_info: List of (section_name, start_slide_idx, slide_count) for creating sections
         """
         temp_path = tempfile.mktemp(suffix='.pptx')
-        abs_temp = os.path.abspath(temp_path).replace("/", "\\")
+        abs_temp = self._get_short_path(os.path.abspath(temp_path).replace("/", "\\"))
 
         # Collect unique source files for master import
         unique_sources = []
@@ -203,7 +224,7 @@ class PptxService:
         for source_path, slide_indices in slides_to_copy:
             if not os.path.exists(source_path):
                 continue
-            abs_source = os.path.abspath(source_path).replace("/", "\\")
+            abs_source = self._get_short_path(os.path.abspath(source_path).replace("/", "\\"))
             if abs_source not in seen_sources:
                 seen_sources.add(abs_source)
                 unique_sources.append(abs_source)
@@ -337,7 +358,7 @@ class PptxService:
             if not os.path.exists(source_path):
                 continue
 
-            abs_source = os.path.abspath(source_path).replace("/", "\\")
+            abs_source = self._get_short_path(os.path.abspath(source_path).replace("/", "\\"))
             escaped_source = abs_source.replace("\\", "\\\\")
             source_basename = os.path.basename(source_path)
 

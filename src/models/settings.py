@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from typing import List, Optional
 
 from ..logging_config import get_logger
 
@@ -83,6 +83,9 @@ class Settings:
     bible_font_size: int = 12
     bible_show_verse_numbers: bool = True
     youversion_api_key: str = ""
+    # User-curated list of liturgy item titles that should never be treated as songs.
+    # Populated when the user explicitly marks an item as "liturgical" in the import dialog.
+    user_liturgy_items: List[str] = field(default_factory=list)
 
     # Window state
     window_width: int = 1200

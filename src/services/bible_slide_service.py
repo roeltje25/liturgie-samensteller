@@ -11,8 +11,8 @@ reference overrides that cover the same passage but with different numbering
 will still line up correctly.
 """
 
-import math
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -48,6 +48,7 @@ class BibleSlideConfig:
 
     font_name: str = "Calibri"
     font_size: int = 12           # points
+    max_chars_per_slide: int = 500  # total characters before starting a new slide
     slide_width: float = 10.0     # inches (standard 4:3)
     slide_height: float = 7.5     # inches
     show_verse_numbers: bool = True
@@ -70,12 +71,8 @@ class BibleSlideConfig:
 _TITLE_HEIGHT_FRAC = 0.11   # 11 % of slide height for title bar
 _HEADER_HEIGHT_FRAC = 0.07  # 7 % for translation-name header row
 
-# Safety factor: fill text boxes to at most this fraction of their height
-# to avoid accidental overflow due to estimation inaccuracies.
-_FILL_SAFETY = 0.85
-
-# Approximate average character width as a fraction of font size (Calibri-like)
-_AVG_CHAR_WIDTH_RATIO = 0.50
+# Sentence boundary pattern: split after . ! ? followed by whitespace
+_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +236,13 @@ class BibleSlideService:
 
         all_row_indices = list(range(max_rows))
 
+        # Expand any row whose text (in any column) exceeds max_chars_per_slide
+        # by splitting at sentence boundaries.  This produces sub-rows that are
+        # aligned across all columns (shorter translations get empty sub-rows).
+        verse_lookup, all_row_indices = _expand_long_verses(
+            verse_lookup, all_row_indices, n_cols, config.max_chars_per_slide
+        )
+
         # Determine which rows go on which slide
         row_groups = self._group_rows_for_slides(
             all_row_indices=all_row_indices,
@@ -374,40 +378,34 @@ class BibleSlideService:
         geom: "_SlideGeometry",
         config: BibleSlideConfig,
     ) -> List[List[int]]:
-        col_width_in = geom.column_width(n_translations)
-        col_width_pt = col_width_in * 72.0
-        text_area_h_pt = geom.text_area_height_in(config) * 72.0
+        """Bin rows into slides using a character-count limit.
 
-        avg_char_w_pt = config.font_size * _AVG_CHAR_WIDTH_RATIO
-        chars_per_line = max(1, col_width_pt / avg_char_w_pt)
-        line_height_pt = config.font_size * 1.35
-        para_spacing_pt = config.font_size * 0.4
-        available_h_pt = text_area_h_pt * _FILL_SAFETY
-
+        Accumulates rows until adding the next row would exceed
+        max_chars_per_slide, then starts a new slide.  The limit is compared
+        against the *longest* translation column for each row so the widest
+        text drives the split decision.
+        """
+        max_chars = config.max_chars_per_slide
         groups: List[List[int]] = []
         current_group: List[int] = []
-        current_h_pt: float = 0.0
+        current_chars: int = 0
 
         for row_idx in all_row_indices:
-            row_h_pt = 0.0
-            for t_idx in range(n_translations):
-                text = verse_lookup.get((t_idx, row_idx), "")
-                h = _estimate_text_height_pt(text, chars_per_line, line_height_pt, para_spacing_pt)
-                row_h_pt = max(row_h_pt, h)
-
-            if current_group and (current_h_pt + row_h_pt > available_h_pt):
+            row_chars = max(
+                len(verse_lookup.get((t, row_idx), ""))
+                for t in range(n_translations)
+            )
+            if current_group and current_chars + row_chars > max_chars:
                 groups.append(current_group)
                 current_group = [row_idx]
-                current_h_pt = row_h_pt
+                current_chars = row_chars
             else:
                 current_group.append(row_idx)
-                current_h_pt += row_h_pt
+                current_chars += row_chars
 
         if current_group:
             groups.append(current_group)
-        if not groups:
-            groups = [[]]
-        return groups
+        return groups or [[]]
 
 
 # ---------------------------------------------------------------------------
@@ -446,24 +444,68 @@ class _SlideGeometry:
 
 
 # ---------------------------------------------------------------------------
-# Text height estimation
+# Verse-splitting helpers
 # ---------------------------------------------------------------------------
 
-def _estimate_text_height_pt(
-    text: str,
-    chars_per_line: float,
-    line_height_pt: float,
-    para_spacing_pt: float,
-) -> float:
-    if not text:
-        return 0.0
-    paragraphs = text.split("\n")
-    total_h = 0.0
-    for para in paragraphs:
-        n_chars = max(1, len(para))
-        n_lines = math.ceil(n_chars / chars_per_line)
-        total_h += n_lines * line_height_pt + para_spacing_pt
-    return total_h
+def _split_at_sentence_boundaries(text: str, max_chars: int) -> List[str]:
+    """Split *text* into parts of at most *max_chars* characters each.
+
+    Cuts only at sentence endings (.  !  ?) followed by whitespace.
+    If no sentence boundary exists the whole text is returned as a single
+    part (no mid-word cuts ever occur).
+    """
+    if len(text) <= max_chars:
+        return [text]
+    sentences = _SENTENCE_SPLIT_RE.split(text)
+    parts: List[str] = []
+    current = ""
+    for s in sentences:
+        candidate = (current + " " + s).strip() if current else s
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                parts.append(current)
+            current = s
+    if current:
+        parts.append(current)
+    return parts or [text]
+
+
+def _expand_long_verses(
+    verse_lookup: Dict[Tuple[int, int], str],
+    all_row_indices: List[int],
+    n_cols: int,
+    max_chars: int,
+) -> Tuple[Dict[Tuple[int, int], str], List[int]]:
+    """Expand verse rows that exceed *max_chars* into sentence-split sub-rows.
+
+    When a verse in *any* translation column is longer than *max_chars*, the
+    row is replaced by multiple sub-rows — one per sentence group.  Shorter
+    translations in the same row are placed entirely in the first sub-row;
+    remaining sub-rows are left empty so layout stays aligned across columns.
+    """
+    expanded: Dict[Tuple[int, int], str] = {}
+    new_indices: List[int] = []
+    new_row = 0
+
+    for orig_row in all_row_indices:
+        splits_per_col: Dict[int, List[str]] = {}
+        max_parts = 1
+        for col_idx in range(n_cols):
+            text = verse_lookup.get((col_idx, orig_row), "")
+            parts = _split_at_sentence_boundaries(text, max_chars)
+            splits_per_col[col_idx] = parts
+            max_parts = max(max_parts, len(parts))
+
+        for sub in range(max_parts):
+            for col_idx in range(n_cols):
+                parts = splits_per_col[col_idx]
+                expanded[(col_idx, new_row)] = parts[sub] if sub < len(parts) else ""
+            new_indices.append(new_row)
+            new_row += 1
+
+    return expanded, new_indices
 
 
 # ---------------------------------------------------------------------------

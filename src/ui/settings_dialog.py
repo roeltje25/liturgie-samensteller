@@ -180,6 +180,12 @@ class SettingsDialog(QDialog):
         self.bible_font_size_spin.setSuffix(" pt")
         bible_layout.addRow(tr("dialog.settings.bible_font_size"), self.bible_font_size_spin)
 
+        self.bible_chars_per_slide_spin = QSpinBox()
+        self.bible_chars_per_slide_spin.setRange(100, 2000)
+        self.bible_chars_per_slide_spin.setSingleStep(50)
+        self.bible_chars_per_slide_spin.setSuffix(" chars")
+        bible_layout.addRow(tr("dialog.settings.bible_chars_per_slide"), self.bible_chars_per_slide_spin)
+
         self.bible_show_verse_numbers_check = QCheckBox(tr("dialog.settings.bible_show_verse_numbers"))
         bible_layout.addRow("", self.bible_show_verse_numbers_check)
 
@@ -239,6 +245,7 @@ class SettingsDialog(QDialog):
         # Bible text settings
         self.bible_font_name_input.setText(self.settings.bible_font_name)
         self.bible_font_size_spin.setValue(self.settings.bible_font_size)
+        self.bible_chars_per_slide_spin.setValue(self.settings.bible_chars_per_slide)
         self.bible_show_verse_numbers_check.setChecked(self.settings.bible_show_verse_numbers)
         self.youversion_api_key_input.setText(self.settings.youversion_api_key)
 
@@ -356,6 +363,7 @@ class SettingsDialog(QDialog):
         self.settings.song_cover_filename = self.song_cover_input.text()
         self.settings.bible_font_name = self.bible_font_name_input.text().strip() or "Calibri"
         self.settings.bible_font_size = self.bible_font_size_spin.value()
+        self.settings.bible_chars_per_slide = self.bible_chars_per_slide_spin.value()
         self.settings.bible_show_verse_numbers = self.bible_show_verse_numbers_check.isChecked()
         self.settings.youversion_api_key = self.youversion_api_key_input.text().strip()
         self.settings.language = self.language_combo.currentData()

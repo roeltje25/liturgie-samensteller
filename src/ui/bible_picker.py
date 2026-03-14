@@ -209,6 +209,7 @@ class BiblePickerDialog(QDialog):
         self,
         default_font_name: str = "Calibri",
         default_font_size: int = 12,
+        default_chars_per_slide: int = 500,
         api_key: str = "",
         parent=None,
     ) -> None:
@@ -224,6 +225,7 @@ class BiblePickerDialog(QDialog):
 
         self._default_font_name = default_font_name
         self._default_font_size = default_font_size
+        self._default_chars_per_slide = default_chars_per_slide
 
         # All available translations
         self._all_translations: List[BibleTranslation] = [
@@ -349,6 +351,12 @@ class BiblePickerDialog(QDialog):
         self.font_size_spin.setValue(self._default_font_size)
         self.font_size_spin.setSuffix(" pt")
         font_form.addRow(tr("dialog.bible.font_size"), self.font_size_spin)
+        self.chars_per_slide_spin = QSpinBox()
+        self.chars_per_slide_spin.setRange(100, 2000)
+        self.chars_per_slide_spin.setSingleStep(50)
+        self.chars_per_slide_spin.setValue(self._default_chars_per_slide)
+        self.chars_per_slide_spin.setSuffix(tr("dialog.bible.chars_suffix"))
+        font_form.addRow(tr("dialog.bible.chars_per_slide"), self.chars_per_slide_spin)
         left_layout.addWidget(font_group)
         left_layout.addStretch()
 
@@ -846,6 +854,7 @@ class BiblePickerDialog(QDialog):
         config = BibleSlideConfig(
             font_name=self.font_name_edit.text().strip() or "Calibri",
             font_size=self.font_size_spin.value(),
+            max_chars_per_slide=self.chars_per_slide_spin.value(),
         )
         overrides = self._get_reference_overrides()
 

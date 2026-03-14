@@ -81,6 +81,7 @@ class Settings:
     # Bible text slides
     bible_font_name: str = "Calibri"
     bible_font_size: int = 12
+    bible_chars_per_slide: int = 500
     bible_show_verse_numbers: bool = True
     youversion_api_key: str = ""
     # User-curated list of liturgy item titles that should never be treated as songs.

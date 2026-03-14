@@ -347,6 +347,7 @@
   "element.algemeen": "General",
   "element.collecte": "Offering",
 
+  "error.bible.no_base_folder": "Base folder not configured. Please set the base folder in Settings so that generated files can be shared.",
   "error.file_not_found": "File not found: {path}",
   "error.load_failed": "Could not load file: {error}",
   "error.save_failed": "Could not save file: {error}",

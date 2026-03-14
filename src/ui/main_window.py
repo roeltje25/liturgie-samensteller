@@ -823,10 +823,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr("dialog.bible.title"), tr("dialog.bible.error.no_file"))
             return
 
-        # Persist the generated PPTX next to the liturgy or in the base folder
-        bible_dir = os.path.join(
-            self.settings.get_effective_base_path(self.base_path), "BibelTeksten"
-        )
+        # Persist the generated PPTX in the shared base folder so all users can
+        # access it when they open the liturgy.  base_folder is the configured
+        # shared root (e.g. a network drive); without it the file would be saved
+        # locally and the path would not resolve on other machines.
+        if not self.settings.base_folder or not os.path.isdir(self.settings.base_folder):
+            QMessageBox.warning(
+                self,
+                tr("dialog.bible.title"),
+                tr("error.bible.no_base_folder"),
+            )
+            return
+        bible_dir = os.path.join(self.settings.base_folder, "BibelTeksten")
         os.makedirs(bible_dir, exist_ok=True)
 
         # Sanitise section name for filename

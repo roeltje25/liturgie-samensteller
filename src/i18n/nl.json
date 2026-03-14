@@ -360,6 +360,7 @@
   "element.algemeen": "Algemeen",
   "element.collecte": "Collecte",
 
+  "error.bible.no_base_folder": "Basismap niet geconfigureerd. Stel de basismap in via Instellingen zodat gegenereerde bestanden gedeeld kunnen worden.",
   "error.file_not_found": "Bestand niet gevonden: {path}",
   "error.load_failed": "Kon bestand niet laden: {error}",
   "error.save_failed": "Kon bestand niet opslaan: {error}",

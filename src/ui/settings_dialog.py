@@ -139,6 +139,9 @@ class SettingsDialog(QDialog):
         self.stub_template_input = QLineEdit()
         files_layout.addRow(tr("dialog.settings.stub_template"), self.stub_template_input)
 
+        self.bible_template_input = QLineEdit()
+        files_layout.addRow(tr("dialog.settings.bible_template"), self.bible_template_input)
+
         self.output_pattern_input = QLineEdit()
         files_layout.addRow(tr("dialog.settings.output_pattern"), self.output_pattern_input)
 
@@ -233,6 +236,7 @@ class SettingsDialog(QDialog):
         self.output_folder_input.setText(self.settings.output_folder)
         self.collecte_input.setText(self.settings.collecte_filename)
         self.stub_template_input.setText(self.settings.stub_template_filename)
+        self.bible_template_input.setText(self.settings.bible_template_filename)
         self.output_pattern_input.setText(self.settings.output_pattern)
         self.excel_register_input.setText(self.settings.excel_register_path)
         self.pptx_archive_input.setText(self.settings.pptx_archive_folder)
@@ -356,6 +360,7 @@ class SettingsDialog(QDialog):
         self.settings.output_folder = self.output_folder_input.text()
         self.settings.collecte_filename = self.collecte_input.text()
         self.settings.stub_template_filename = self.stub_template_input.text()
+        self.settings.bible_template_filename = self.bible_template_input.text()
         self.settings.output_pattern = self.output_pattern_input.text()
         self.settings.excel_register_path = self.excel_register_input.text()
         self.settings.pptx_archive_folder = self.pptx_archive_input.text()

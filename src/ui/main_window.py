@@ -810,6 +810,7 @@ class MainWindow(QMainWindow):
             default_font_size=self.settings.bible_font_size,
             default_chars_per_slide=self.settings.bible_chars_per_slide,
             api_key=self.settings.youversion_api_key,
+            template_path=self.settings.get_bible_template_path(self.base_path),
             parent=self,
         )
 

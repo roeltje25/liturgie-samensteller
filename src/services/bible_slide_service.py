@@ -112,6 +112,7 @@ class BibleSlideService:
         translation_ids: List[int],
         config: Optional[BibleSlideConfig] = None,
         reference_overrides: Optional[Dict[int, str]] = None,
+        template_path: Optional[str] = None,
     ) -> str:
         """Generate a temporary PPTX file with Bible text slides.
 
@@ -187,7 +188,10 @@ class BibleSlideService:
         title_ref = main_refs[0]
 
         # 5. Build slides
-        return self._build_presentation(title_ref, slots, qr_url, config, display_label)
+        return self._build_presentation(
+            title_ref, slots, qr_url, config, display_label,
+            template_path=template_path,
+        )
 
     def fetch_verses_for_slot(
         self,
@@ -211,6 +215,7 @@ class BibleSlideService:
         qr_url: str,
         config: BibleSlideConfig,
         display_label: Optional[str] = None,
+        template_path: Optional[str] = None,
     ) -> str:
         prs = Presentation()
         prs.slide_width = Inches(config.slide_width)
@@ -258,6 +263,21 @@ class BibleSlideService:
         # Generate QR image once
         qr_image: Optional[BytesIO] = _generate_qr(qr_url)
 
+        # Try template-based generation if a template is available
+        if template_path and os.path.exists(template_path):
+            try:
+                return self._build_from_template(
+                    template_path, main_ref, slots, row_groups,
+                    verse_lookup, rtl_flags, qr_image, config,
+                    display_label=display_label,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Template-based generation failed, falling back to default: %s",
+                    exc, exc_info=True,
+                )
+
+        # --- From-scratch fallback ---
         blank_layout = prs.slide_layouts[6]
         slide_label = display_label if display_label else main_ref.display_str
 
@@ -406,6 +426,226 @@ class BibleSlideService:
         if current_group:
             groups.append(current_group)
         return groups or [[]]
+
+    # ------------------------------------------------------------------
+    # Private – template-based builder
+    # ------------------------------------------------------------------
+
+    def _build_from_template(
+        self,
+        template_path: str,
+        main_ref: BibleReference,
+        slots: List[TranslationSlot],
+        row_groups: List[List[int]],
+        verse_lookup: Dict[Tuple[int, int], str],
+        rtl_flags: List[bool],
+        qr_image: Optional[BytesIO],
+        config: BibleSlideConfig,
+        display_label: Optional[str] = None,
+    ) -> str:
+        prs = Presentation(template_path)
+        n_cols = len(slots)
+        slide_label = display_label if display_label else main_ref.display_str
+
+        # Build map: column_count → slide index in the template
+        template_map = _build_template_map(prs)
+        if not template_map:
+            raise ValueError("No {CONTENT_N} placeholders found in template")
+
+        logger.info(
+            "Bible template map: %s (need %d columns)",
+            template_map, n_cols,
+        )
+
+        # Determine how to split columns across template slides
+        split_plan = _plan_column_splits(n_cols, sorted(template_map.keys(), reverse=True))
+
+        n_template_slides = len(prs.slides)
+
+        for group_idx, group_rows in enumerate(row_groups):
+            # Build title text
+            title_text = slide_label
+            if len(row_groups) > 1:
+                vr_start = slots[0].verses[group_rows[0]].verse_num if group_rows and slots[0].verses else "?"
+                vr_end = slots[0].verses[group_rows[-1]].verse_num if group_rows and slots[0].verses else "?"
+                if vr_start != vr_end:
+                    title_text += f"  ({main_ref.chapter}:{vr_start}\u2013{vr_end})"
+
+            for split_idx, (tpl_size, col_indices) in enumerate(split_plan):
+                tpl_slide_idx = template_map[tpl_size]
+                template_slide = prs.slides[tpl_slide_idx]
+                new_slide = _clone_slide(prs, template_slide)
+
+                # Build fields dict: map template {CONTENT_1} etc. to actual column data
+                fields: Dict[str, str] = {"TITLE": title_text}
+                for local_idx, global_col in enumerate(col_indices):
+                    slot = slots[global_col]
+                    n = local_idx + 1
+                    ref_label = f" [{slot.reference_override}]" if slot.reference_override else ""
+                    fields[f"HEADER_{n}"] = f"{slot.translation.abbreviation} \u2013 {slot.translation.name}{ref_label}"
+
+                    lines = []
+                    for row_idx in group_rows:
+                        lines.append(verse_lookup.get((global_col, row_idx), ""))
+                    fields[f"CONTENT_{n}"] = "\n".join(lines)
+
+                _fill_template_fields(new_slide, fields)
+
+                # QR: only on the last slide of each verse group
+                is_last_split = split_idx == len(split_plan) - 1
+                if is_last_split and qr_image:
+                    _replace_qr_placeholder(new_slide, qr_image)
+
+                # Remove shapes still containing unfilled {FIELD} patterns
+                _remove_unfilled_placeholders(new_slide)
+
+        # Remove original template slides (iterate in reverse to keep indices stable)
+        xml_sldIdLst = prs.slides._sldIdLst
+        slide_ids = list(xml_sldIdLst)
+        for sid in slide_ids[:n_template_slides]:
+            xml_sldIdLst.remove(sid)
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".pptx", prefix="bible_slides_")
+        os.close(fd)
+        prs.save(tmp_path)
+        logger.info(
+            "Bible slides (template) saved to: %s (%d slides)",
+            tmp_path, len(prs.slides),
+        )
+        return tmp_path
+
+
+# ---------------------------------------------------------------------------
+# Template helpers
+# ---------------------------------------------------------------------------
+
+_FIELD_PATTERN = re.compile(r'\{([A-Za-z_][A-Za-z0-9_]*)\}')
+_CONTENT_N_PATTERN = re.compile(r'CONTENT_(\d+)', re.IGNORECASE)
+
+
+def _build_template_map(prs) -> Dict[int, int]:
+    """Scan all slides and return {column_count: slide_index}.
+
+    Column count is determined by the highest N in {CONTENT_N} on each slide.
+    """
+    result: Dict[int, int] = {}
+    for slide_idx, slide in enumerate(prs.slides):
+        max_n = 0
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for field_name in _FIELD_PATTERN.findall(shape.text_frame.text):
+                    m = _CONTENT_N_PATTERN.match(field_name)
+                    if m:
+                        max_n = max(max_n, int(m.group(1)))
+        if max_n > 0:
+            # First slide wins for each column count
+            if max_n not in result:
+                result[max_n] = slide_idx
+    return result
+
+
+def _plan_column_splits(
+    n_cols: int,
+    available_sizes: List[int],
+) -> List[Tuple[int, List[int]]]:
+    """Greedily split n_cols across available template sizes.
+
+    Returns list of (template_size, [column_indices]) tuples.
+    E.g. n_cols=4, available=[3,2,1] → [(3, [0,1,2]), (1, [3])]
+    """
+    if not available_sizes:
+        raise ValueError("No template slides available")
+
+    plan: List[Tuple[int, List[int]]] = []
+    remaining = list(range(n_cols))
+
+    while remaining:
+        # Find the largest template that fits without exceeding remaining columns
+        best = None
+        for size in available_sizes:
+            if size <= len(remaining):
+                best = size
+                break
+        if best is None:
+            # All templates are larger than remaining; use smallest available
+            best = available_sizes[-1]
+
+        chunk = remaining[:best]
+        remaining = remaining[best:]
+        plan.append((best, chunk))
+
+    return plan
+
+
+def _clone_slide(prs, template_slide):
+    """Clone a slide by deep-copying its XML into a new slide."""
+    from copy import deepcopy
+    from lxml import etree
+
+    layout = template_slide.slide_layout
+    new_slide = prs.slides.add_slide(layout)
+
+    # Clear any auto-generated shapes from the layout
+    spTree = new_slide.shapes._spTree
+    for child in list(spTree):
+        tag = etree.QName(child.tag).localname
+        if tag in ('sp', 'pic', 'grpSp', 'graphicFrame', 'cxnSp'):
+            spTree.remove(child)
+
+    # Deep copy all shapes from template
+    for child in template_slide.shapes._spTree:
+        tag = etree.QName(child.tag).localname
+        if tag in ('sp', 'pic', 'grpSp', 'graphicFrame', 'cxnSp'):
+            spTree.append(deepcopy(child))
+
+    # Copy background
+    template_bg = template_slide.background._element
+    new_bg = new_slide.background._element
+    for child in list(new_bg):
+        new_bg.remove(child)
+    for child in template_bg:
+        new_bg.append(deepcopy(child))
+
+    return new_slide
+
+
+def _fill_template_fields(slide, fields: Dict[str, str]) -> None:
+    """Replace {FIELD_NAME} patterns in all text runs, preserving formatting."""
+    for shape in slide.shapes:
+        if shape.has_text_frame:
+            for paragraph in shape.text_frame.paragraphs:
+                for run in paragraph.runs:
+                    new_text = run.text
+                    for match in _FIELD_PATTERN.findall(run.text):
+                        if match in fields:
+                            new_text = new_text.replace(f"{{{match}}}", fields[match])
+                    if new_text != run.text:
+                        run.text = new_text
+
+
+def _replace_qr_placeholder(slide, qr_image: BytesIO) -> bool:
+    """Find shape containing {QR}, replace with QR image at same position/size."""
+    for shape in list(slide.shapes):
+        if shape.has_text_frame and "{QR}" in shape.text_frame.text:
+            left, top = shape.left, shape.top
+            width, height = shape.width, shape.height
+            shape._element.getparent().remove(shape._element)
+            qr_image.seek(0)
+            slide.shapes.add_picture(
+                qr_image, left=left, top=top,
+                width=width, height=height,
+            )
+            return True
+    return False
+
+
+def _remove_unfilled_placeholders(slide) -> None:
+    """Remove shapes that still contain unfilled {FIELD} patterns."""
+    for shape in list(slide.shapes):
+        if shape.has_text_frame:
+            text = shape.text_frame.text
+            if _FIELD_PATTERN.search(text):
+                shape._element.getparent().remove(shape._element)
 
 
 # ---------------------------------------------------------------------------

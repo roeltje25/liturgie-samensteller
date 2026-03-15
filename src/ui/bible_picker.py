@@ -168,6 +168,7 @@ class _GenerateSlidesWorker(QThread):
         config: BibleSlideConfig,
         reference_overrides: Dict[int, str],
         api_key: str = "",
+        template_path: Optional[str] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -176,6 +177,7 @@ class _GenerateSlidesWorker(QThread):
         self._config = config
         self._overrides = reference_overrides
         self._api_key = api_key
+        self._template_path = template_path
 
     def run(self) -> None:
         try:
@@ -186,6 +188,7 @@ class _GenerateSlidesWorker(QThread):
                 self._translation_ids,
                 self._config,
                 self._overrides,
+                template_path=self._template_path,
             )
             self.finished.emit(path)
         except Exception as exc:
@@ -211,10 +214,12 @@ class BiblePickerDialog(QDialog):
         default_font_size: int = 12,
         default_chars_per_slide: int = 500,
         api_key: str = "",
+        template_path: Optional[str] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._bible_service = BibleService(api_key=api_key)
+        self._template_path = template_path
         self._worker: Optional[_GenerateSlidesWorker] = None
         self._fetch_worker: Optional[_FetchTranslationsWorker] = None
         self._preview_worker: Optional[_FetchPreviewWorker] = None
@@ -862,7 +867,9 @@ class BiblePickerDialog(QDialog):
 
         self._worker = _GenerateSlidesWorker(
             reference, translation_ids, config, overrides,
-            api_key=self._bible_service._api_key, parent=self,
+            api_key=self._bible_service._api_key,
+            template_path=self._template_path,
+            parent=self,
         )
         self._worker.finished.connect(self._on_generation_done)
         self._worker.error.connect(self._on_generation_error)

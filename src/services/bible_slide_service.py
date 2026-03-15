@@ -472,7 +472,7 @@ class BibleSlideService:
                     title_text += f"  ({main_ref.chapter}:{vr_start}\u2013{vr_end})"
 
             for split_idx, (tpl_size, col_indices) in enumerate(split_plan):
-                tpl_slide_idx = template_map[tpl_size]
+                tpl_slide_idx, _chars_hint = template_map[tpl_size]
                 template_slide = prs.slides[tpl_slide_idx]
                 new_slide = _clone_slide(prs, template_slide)
 
@@ -521,26 +521,33 @@ class BibleSlideService:
 
 _FIELD_PATTERN = re.compile(r'\{([A-Za-z_][A-Za-z0-9_]*)\}')
 _CONTENT_N_PATTERN = re.compile(r'CONTENT_(\d+)', re.IGNORECASE)
+_CHARS_HINT_PATTERN = re.compile(r'\{CHARS:(\d+)\}', re.IGNORECASE)
 
 
-def _build_template_map(prs) -> Dict[int, int]:
-    """Scan all slides and return {column_count: slide_index}.
+def _build_template_map(prs) -> Dict[int, Tuple[int, Optional[int]]]:
+    """Scan all slides and return {column_count: (slide_index, suggested_chars)}.
 
     Column count is determined by the highest N in {CONTENT_N} on each slide.
+    suggested_chars comes from a {CHARS:NNN} placeholder on the same slide, or None.
     """
-    result: Dict[int, int] = {}
+    result: Dict[int, Tuple[int, Optional[int]]] = {}
     for slide_idx, slide in enumerate(prs.slides):
         max_n = 0
+        suggested: Optional[int] = None
         for shape in slide.shapes:
             if shape.has_text_frame:
-                for field_name in _FIELD_PATTERN.findall(shape.text_frame.text):
+                text = shape.text_frame.text
+                for field_name in _FIELD_PATTERN.findall(text):
                     m = _CONTENT_N_PATTERN.match(field_name)
                     if m:
                         max_n = max(max_n, int(m.group(1)))
+                m_chars = _CHARS_HINT_PATTERN.search(text)
+                if m_chars:
+                    suggested = int(m_chars.group(1))
         if max_n > 0:
             # First slide wins for each column count
             if max_n not in result:
-                result[max_n] = slide_idx
+                result[max_n] = (slide_idx, suggested)
     return result
 
 
@@ -575,6 +582,31 @@ def _plan_column_splits(
         plan.append((best, chunk))
 
     return plan
+
+
+def get_template_chars_hint(template_path: str, n_cols: int) -> Optional[int]:
+    """Return minimum suggested chars-per-slide for *n_cols* translations.
+
+    Reads *template_path*, builds the template map, determines which template
+    slides will be used via _plan_column_splits, and returns the minimum
+    {CHARS:NNN} value across those slides.  Returns None if no slide carries a
+    hint or the template cannot be read.
+    """
+    try:
+        prs = Presentation(template_path)
+    except Exception as exc:
+        logger.warning("get_template_chars_hint: could not open %s: %s", template_path, exc)
+        return None
+    template_map = _build_template_map(prs)
+    if not template_map:
+        return None
+    available_sizes = sorted(template_map.keys(), reverse=True)
+    try:
+        split_plan = _plan_column_splits(n_cols, available_sizes)
+    except ValueError:
+        return None
+    hints = [template_map[size][1] for size, _ in split_plan if template_map[size][1] is not None]
+    return min(hints) if hints else None
 
 
 def _clone_slide(prs, template_slide):
@@ -640,11 +672,11 @@ def _replace_qr_placeholder(slide, qr_image: BytesIO) -> bool:
 
 
 def _remove_unfilled_placeholders(slide) -> None:
-    """Remove shapes that still contain unfilled {FIELD} patterns."""
+    """Remove shapes that still contain unfilled {FIELD} or {CHARS:NNN} patterns."""
     for shape in list(slide.shapes):
         if shape.has_text_frame:
             text = shape.text_frame.text
-            if _FIELD_PATTERN.search(text):
+            if _FIELD_PATTERN.search(text) or _CHARS_HINT_PATTERN.search(text):
                 shape._element.getparent().remove(shape._element)
 
 

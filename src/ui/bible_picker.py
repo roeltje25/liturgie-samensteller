@@ -56,7 +56,7 @@ from ..services.bible_service import (
     parse_reference,
     parse_references,
 )
-from ..services.bible_slide_service import BibleSlideConfig, BibleSlideService
+from ..services.bible_slide_service import BibleSlideConfig, BibleSlideService, get_template_chars_hint
 from ..services.google_translate_service import (
     TRANSLATE_LANGUAGES,
     is_rtl,
@@ -531,6 +531,18 @@ class BiblePickerDialog(QDialog):
         self._rewire_remove_buttons()
         self._populate_available_list(filter_lang=self.language_combo.currentData() or "")
         self._clear_preview()
+        self._update_chars_hint()
+
+    def _update_chars_hint(self) -> None:
+        """Update chars_per_slide_spin from the template hint for the current column count."""
+        if not self._template_path or not os.path.exists(self._template_path):
+            return
+        n_cols = self.selected_table.rowCount()
+        if n_cols == 0:
+            return
+        hint = get_template_chars_hint(self._template_path, n_cols)
+        if hint is not None:
+            self.chars_per_slide_spin.setValue(hint)
 
     def _get_selected_slots(self) -> List[Tuple[BibleTranslation, str]]:
         """Return list of (translation, effective_reference) in table order."""
@@ -597,6 +609,7 @@ class BiblePickerDialog(QDialog):
 
         self._populate_available_list(filter_lang=self.language_combo.currentData() or "")
         self._clear_preview()
+        self._update_chars_hint()
 
     def _on_fetch_more(self) -> None:
         lang = self.language_combo.currentData() or ""

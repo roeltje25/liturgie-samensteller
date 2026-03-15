@@ -157,6 +157,7 @@
   "dialog.settings.files": "Bestanden",
   "dialog.settings.collecte_file": "Collecte bestand:",
   "dialog.settings.stub_template": "Stub sjabloon:",
+  "dialog.settings.bible_template": "Bijbel sjabloon:",
   "dialog.settings.output_pattern": "Uitvoer patroon:",
   "dialog.settings.excel_register": "Liederen register (Excel):",
   "dialog.settings.song_cover_enabled": "Lied voorblad toevoegen",

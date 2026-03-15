@@ -99,10 +99,11 @@ class FolderScanner:
         items = []
         collecte_name = self.settings.collecte_filename.lower()
         stub_name = self.settings.stub_template_filename.lower()
+        bible_name = self.settings.bible_template_filename.lower()
 
         for item in os.listdir(generic_path):
-            # Skip Collecte and StubTemplate
-            if item.lower() in (collecte_name, stub_name):
+            # Skip Collecte, StubTemplate and BijbelTemplate
+            if item.lower() in (collecte_name, stub_name, bible_name):
                 continue
 
             item_path = os.path.join(generic_path, item)

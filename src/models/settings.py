@@ -65,6 +65,7 @@ class Settings:
     themes_folder: str = "./Themas"
     collecte_filename: str = "Collecte.pptx"
     stub_template_filename: str = "StubTemplate.pptx"
+    bible_template_filename: str = "BijbelTemplate.pptx"
     output_pattern: str = "{date}_viering-generated.pptx"
     language: str = "nl"
 
@@ -193,6 +194,14 @@ class Settings:
         """Get absolute path to stub template if it exists."""
         algemeen = self.get_algemeen_path(base_path)
         path = os.path.join(algemeen, self.stub_template_filename)
+        if os.path.exists(path):
+            return path
+        return None
+
+    def get_bible_template_path(self, base_path: str = ".") -> Optional[str]:
+        """Get absolute path to Bible template if it exists."""
+        algemeen = self.get_algemeen_path(base_path)
+        path = os.path.join(algemeen, self.bible_template_filename)
         if os.path.exists(path):
             return path
         return None

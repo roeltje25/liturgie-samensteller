@@ -157,6 +157,7 @@
   "dialog.settings.files": "Files",
   "dialog.settings.collecte_file": "Offering file:",
   "dialog.settings.stub_template": "Stub template:",
+  "dialog.settings.bible_template": "Bible template:",
   "dialog.settings.output_pattern": "Output pattern:",
   "dialog.settings.excel_register": "Song register (Excel):",
   "dialog.settings.song_cover_enabled": "Add song cover slide",

@@ -1142,7 +1142,10 @@ class MainWindow(QMainWindow):
 
     def _on_save_as(self) -> None:
         """Save liturgy to new file."""
-        default_name = f"{self.liturgy.name}.json"
+        if self.liturgy.service_date:
+            default_name = f"{self.liturgy.service_date} {tr('word.liturgy')}.json"
+        else:
+            default_name = f"{self.liturgy.name}.json"
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             tr("menu.file.save_as"),

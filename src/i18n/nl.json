@@ -370,6 +370,8 @@
   "language.nl": "Nederlands",
   "language.en": "English",
 
+  "word.liturgy": "Liturgie",
+
   "warning.missing_pptx": "PowerPoint-bestand niet gevonden",
   "warning.no_pptx": "Geen PowerPoint-bestand geconfigureerd",
   "warning.missing_youtube": "Geen YouTube-link",

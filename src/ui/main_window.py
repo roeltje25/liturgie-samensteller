@@ -545,9 +545,17 @@ class MainWindow(QMainWindow):
     def _on_add_song(self) -> None:
         """Add a song to the liturgy."""
         songs = self.folder_scanner.scan_songs()
-        dialog = SongPickerDialog(songs, pptx_service=self.pptx_service, parent=self)
+        dialog = SongPickerDialog(
+            songs,
+            pptx_service=self.pptx_service,
+            settings=self.settings,
+            base_path=self.base_path,
+            parent=self,
+        )
 
         if dialog.exec():
+            if dialog.new_song_created:
+                self.folder_scanner.refresh()
             item = dialog.get_selected_item()
             if item:
                 new_idx = self._insert_item_at_cursor(item)

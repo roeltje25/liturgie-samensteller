@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap
 
-from ..models import Song, SongLiturgyItem
+from ..models import Song, SongLiturgyItem, Settings
 from ..services import PptxService
 from ..services.song_matcher import normalize_for_search as _normalize_for_search, fuzzy_match_score as _fuzzy_match_raw
 from ..i18n import tr
@@ -35,14 +35,24 @@ def _fuzzy_match(query: str, text: str) -> float:
 class SongPickerDialog(QDialog):
     """Dialog for selecting a song to add to the liturgy."""
 
-    def __init__(self, songs: List[Song], pptx_service: Optional[PptxService] = None, parent=None):
+    def __init__(
+        self,
+        songs: List[Song],
+        pptx_service: Optional[PptxService] = None,
+        settings: Optional[Settings] = None,
+        base_path: Optional[str] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.songs = songs
         self.pptx_service = pptx_service
+        self.settings = settings
+        self.base_path = base_path
         self._selected_song: Optional[Song] = None
         self._stub_title: Optional[str] = None
         self._external_path: Optional[str] = None
         self._external_title: Optional[str] = None
+        self._new_song_created: bool = False
 
         self._setup_ui()
         self._populate_tree()
@@ -102,6 +112,10 @@ class SongPickerDialog(QDialog):
         self.stub_button = QPushButton(tr("button.create_stub"))
         self.stub_button.setToolTip(tr("dialog.song.stub_tooltip"))
         action_layout.addWidget(self.stub_button)
+
+        self.create_new_button = QPushButton(tr("dialog.song.create_new"))
+        self.create_new_button.setVisible(self.settings is not None and self.base_path is not None)
+        action_layout.addWidget(self.create_new_button)
 
         action_layout.addStretch()
         layout.addWidget(action_group)
@@ -197,6 +211,7 @@ class SongPickerDialog(QDialog):
         self.tree.itemDoubleClicked.connect(self._on_double_click)
         self.browse_button.clicked.connect(self._on_browse_file)
         self.stub_button.clicked.connect(self._on_create_stub)
+        self.create_new_button.clicked.connect(self._on_create_new_song)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
 
@@ -381,6 +396,40 @@ class SongPickerDialog(QDialog):
             self.status_label.setText(tr("dialog.song.stub_selected", title=self._stub_title))
             self.info_label.clear()
             self._update_ok_button()
+
+    def _on_create_new_song(self) -> None:
+        """Open the new-song dialog; on success add the song to the tree and select it."""
+        if not self.settings or not self.base_path:
+            return
+
+        from .new_song_dialog import NewSongDialog
+        dialog = NewSongDialog(self.settings, self.base_path, self)
+        if not dialog.exec():
+            return
+
+        folder_path = dialog.get_created_folder()
+        if not folder_path:
+            return
+
+        songs_path = self.settings.get_songs_path(self.base_path)
+        new_song = Song.from_folder(folder_path, songs_path)
+        if not new_song:
+            return
+
+        self.songs.append(new_song)
+        self._new_song_created = True
+        self._populate_tree()
+
+        # Select the newly created song
+        if new_song.relative_path in self._song_items:
+            item = self._song_items[new_song.relative_path]
+            self.tree.setCurrentItem(item)
+            self.tree.scrollToItem(item)
+
+    @property
+    def new_song_created(self) -> bool:
+        """True if a new song was created from within this dialog."""
+        return self._new_song_created
 
     def _update_ok_button(self) -> None:
         """Update OK button enabled state."""

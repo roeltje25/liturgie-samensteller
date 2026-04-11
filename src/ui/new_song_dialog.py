@@ -2,26 +2,91 @@
 
 import os
 import re
+import urllib.parse
 from typing import Optional
 
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
-    QHBoxLayout,
     QFormLayout,
     QLineEdit,
     QTextEdit,
-    QPushButton,
     QLabel,
     QDialogButtonBox,
     QGroupBox,
     QMessageBox,
     QComboBox,
+    QListWidget,
+    QListWidgetItem,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 
 from ..models import Settings
 from ..i18n import tr
+from ..logging_config import get_logger
+
+logger = get_logger("new_song_dialog")
+
+
+class LyricsSearchWorker(QThread):
+    """Background worker that searches lyrics.ovh for song suggestions."""
+
+    results_ready = pyqtSignal(list, int)  # (results, request_id)
+
+    def __init__(self, query: str, request_id: int, parent=None):
+        super().__init__(parent)
+        self._query = query
+        self._request_id = request_id
+
+    def run(self) -> None:
+        try:
+            import requests
+            encoded = urllib.parse.quote(self._query)
+            url = f"https://api.lyrics.ovh/suggest/{encoded}"
+            resp = requests.get(url, timeout=5)
+            if resp.ok:
+                data = resp.json()
+                results = [
+                    {
+                        "title": item.get("title", ""),
+                        "artist": item.get("artist", {}).get("name", ""),
+                    }
+                    for item in data.get("data", [])[:8]
+                ]
+                self.results_ready.emit(results, self._request_id)
+            else:
+                self.results_ready.emit([], self._request_id)
+        except Exception:
+            self.results_ready.emit([], self._request_id)
+
+
+class LyricsFetchWorker(QThread):
+    """Background worker that fetches full lyrics from lyrics.ovh."""
+
+    lyrics_ready = pyqtSignal(str, int)  # (lyrics, request_id)
+
+    def __init__(self, artist: str, title: str, request_id: int, parent=None):
+        super().__init__(parent)
+        self._artist = artist
+        self._title = title
+        self._request_id = request_id
+
+    def run(self) -> None:
+        try:
+            import requests
+            url = (
+                f"https://api.lyrics.ovh/v1/"
+                f"{urllib.parse.quote(self._artist)}/"
+                f"{urllib.parse.quote(self._title)}"
+            )
+            resp = requests.get(url, timeout=8)
+            if resp.ok:
+                data = resp.json()
+                self.lyrics_ready.emit(data.get("lyrics", ""), self._request_id)
+            else:
+                self.lyrics_ready.emit("", self._request_id)
+        except Exception:
+            self.lyrics_ready.emit("", self._request_id)
 
 
 class NewSongDialog(QDialog):
@@ -33,6 +98,9 @@ class NewSongDialog(QDialog):
         self.base_path = base_path
         self._created_folder: Optional[str] = None
         self._created_pptx: Optional[str] = None
+        self._search_worker: Optional[LyricsSearchWorker] = None
+        self._fetch_worker: Optional[LyricsFetchWorker] = None
+        self._request_id: int = 0
 
         self._setup_ui()
         self._connect_signals()
@@ -41,23 +109,42 @@ class NewSongDialog(QDialog):
         """Setup the dialog UI."""
         self.setWindowTitle(tr("dialog.newsong.title"))
         self.setMinimumSize(500, 500)
-        self.resize(600, 600)
+        self.resize(600, 650)
 
         layout = QVBoxLayout(self)
 
         # Song info group
         info_group = QGroupBox(tr("dialog.newsong.info"))
-        info_layout = QFormLayout(info_group)
+        info_vbox = QVBoxLayout(info_group)
+
+        info_form = QFormLayout()
 
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText(tr("dialog.newsong.title_placeholder"))
-        info_layout.addRow(tr("dialog.newsong.song_title"), self.title_input)
+        info_form.addRow(tr("dialog.newsong.song_title"), self.title_input)
 
-        # Subfolder selection
         self.subfolder_input = QComboBox()
         self.subfolder_input.setEditable(True)
         self._populate_subfolders()
-        info_layout.addRow(tr("dialog.newsong.subfolder"), self.subfolder_input)
+        info_form.addRow(tr("dialog.newsong.subfolder"), self.subfolder_input)
+
+        info_vbox.addLayout(info_form)
+
+        # Search status (shown while searching / fetching)
+        self._search_status = QLabel()
+        self._search_status.setStyleSheet("color: gray; font-style: italic;")
+        self._search_status.setVisible(False)
+        info_vbox.addWidget(self._search_status)
+
+        # Suggestions header + list (shown when results are available)
+        self._suggestions_label = QLabel(tr("dialog.newsong.suggestions_label"))
+        self._suggestions_label.setVisible(False)
+        info_vbox.addWidget(self._suggestions_label)
+
+        self._suggestions_list = QListWidget()
+        self._suggestions_list.setMaximumHeight(100)
+        self._suggestions_list.setVisible(False)
+        info_vbox.addWidget(self._suggestions_list)
 
         layout.addWidget(info_group)
 
@@ -110,10 +197,115 @@ class NewSongDialog(QDialog):
 
     def _connect_signals(self) -> None:
         """Connect widget signals."""
-        self.title_input.textChanged.connect(self._update_preview)
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self._start_lyrics_search)
+
+        self.title_input.textChanged.connect(self._on_title_changed)
         self.lyrics_input.textChanged.connect(self._update_preview)
+        self._suggestions_list.itemDoubleClicked.connect(self._on_suggestion_selected)
         self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)
+
+    # ------------------------------------------------------------------
+    # Lyrics search
+    # ------------------------------------------------------------------
+
+    def _on_title_changed(self, text: str) -> None:
+        """Called when the title field changes; updates preview and triggers debounced search."""
+        self._update_preview()
+        self._search_timer.stop()
+        if len(text.strip()) >= 2:
+            self._search_timer.start(800)
+        else:
+            self._hide_suggestions()
+
+    def _start_lyrics_search(self) -> None:
+        """Start a background search for lyrics suggestions."""
+        query = self.title_input.text().strip()
+        if not query:
+            return
+
+        self._request_id += 1
+        req_id = self._request_id
+
+        self._search_status.setText(tr("dialog.newsong.searching"))
+        self._search_status.setVisible(True)
+        self._suggestions_label.setVisible(False)
+        self._suggestions_list.setVisible(False)
+
+        self._search_worker = LyricsSearchWorker(query, req_id, self)
+        self._search_worker.results_ready.connect(self._on_search_results)
+        self._search_worker.finished.connect(self._search_worker.deleteLater)
+        self._search_worker.start()
+
+    def _on_search_results(self, results: list, req_id: int) -> None:
+        """Handle search results; ignores stale responses."""
+        if req_id != self._request_id:
+            return
+
+        self._search_status.setVisible(False)
+        self._suggestions_list.clear()
+
+        if not results:
+            self._hide_suggestions()
+            return
+
+        for item_data in results:
+            title = item_data["title"]
+            artist = item_data["artist"]
+            display = f"{title}  —  {artist}" if artist else title
+            list_item = QListWidgetItem(display)
+            list_item.setData(Qt.ItemDataRole.UserRole, item_data)
+            self._suggestions_list.addItem(list_item)
+
+        self._suggestions_label.setVisible(True)
+        self._suggestions_list.setVisible(True)
+
+    def _on_suggestion_selected(self, item: QListWidgetItem) -> None:
+        """Fetch and fill lyrics when a suggestion is double-clicked."""
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+
+        artist = data.get("artist", "")
+        title = data.get("title", "")
+        if not artist or not title:
+            return
+
+        self._request_id += 1
+        req_id = self._request_id
+
+        self._search_status.setText(tr("dialog.newsong.fetching_lyrics"))
+        self._search_status.setVisible(True)
+        self._suggestions_label.setVisible(False)
+        self._suggestions_list.setVisible(False)
+
+        self._fetch_worker = LyricsFetchWorker(artist, title, req_id, self)
+        self._fetch_worker.lyrics_ready.connect(self._on_lyrics_fetched)
+        self._fetch_worker.finished.connect(self._fetch_worker.deleteLater)
+        self._fetch_worker.start()
+
+    def _on_lyrics_fetched(self, lyrics: str, req_id: int) -> None:
+        """Fill lyrics textarea when fetch completes; ignores stale responses."""
+        if req_id != self._request_id:
+            return
+
+        self._search_status.setVisible(False)
+        if lyrics:
+            self.lyrics_input.setPlainText(lyrics)
+        self._hide_suggestions()
+
+    def _hide_suggestions(self) -> None:
+        """Hide and clear the suggestions area."""
+        self._search_status.setVisible(False)
+        self._suggestions_label.setVisible(False)
+        self._suggestions_list.clear()
+        self._suggestions_list.setVisible(False)
+
+    # ------------------------------------------------------------------
+    # Existing logic (unchanged)
+    # ------------------------------------------------------------------
 
     def _update_preview(self) -> None:
         """Update the preview info."""

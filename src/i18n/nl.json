@@ -338,6 +338,11 @@
   "dialog.newsong.create": "Lied aanmaken",
   "dialog.newsong.folder_exists": "Map '{name}' bestaat al. Overschrijven?",
   "dialog.newsong.error": "Fout bij aanmaken lied: {error}",
+  "dialog.newsong.searching": "Zoeken naar teksten...",
+  "dialog.newsong.fetching_lyrics": "Teksten ophalen...",
+  "dialog.newsong.suggestions_label": "Suggesties (dubbelklik om te gebruiken):",
+
+  "dialog.song.create_new": "Nieuw lied maken",
 
   "status.ready": "Gereed",
   "status.loading": "Laden...",

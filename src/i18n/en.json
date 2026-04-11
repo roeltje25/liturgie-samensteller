@@ -373,6 +373,11 @@
   "dialog.newsong.create": "Create song",
   "dialog.newsong.folder_exists": "A song folder named '{name}' already exists. Overwrite?",
   "dialog.newsong.error": "Could not create song: {error}",
+  "dialog.newsong.searching": "Searching for lyrics...",
+  "dialog.newsong.fetching_lyrics": "Fetching lyrics...",
+  "dialog.newsong.suggestions_label": "Suggestions (double-click to use):",
+
+  "dialog.song.create_new": "Create new song",
 
   "warning.missing_pptx": "PowerPoint file not found",
   "warning.no_pptx": "No PowerPoint file configured",

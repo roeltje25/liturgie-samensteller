@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.SettingsController"
+            prefWidth="560" prefHeight="560">
+
+    <center>
+        <ScrollPane fitToWidth="true" BorderPane.alignment="CENTER">
+            <VBox spacing="12">
+                <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
+
+                <!-- Folders section -->
+                <TitledPane text="Folders" animated="false" collapsible="false">
+                    <GridPane hgap="8" vgap="6">
+                        <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+
+                        <Label text="Base folder:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <TextField fx:id="tfBaseFolder" GridPane.columnIndex="1" GridPane.rowIndex="0"
+                                   GridPane.hgrow="ALWAYS"/>
+                        <Button text="…" onAction="#onBrowseBase"
+                                GridPane.columnIndex="2" GridPane.rowIndex="0"/>
+
+                        <Label text="Songs subfolder:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <TextField fx:id="tfSongsFolder" GridPane.columnIndex="1" GridPane.rowIndex="1"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Algemeen subfolder:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                        <TextField fx:id="tfAlgemeenFolder" GridPane.columnIndex="1" GridPane.rowIndex="2"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Themes subfolder:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
+                        <TextField fx:id="tfThemesFolder" GridPane.columnIndex="1" GridPane.rowIndex="3"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Output subfolder:" GridPane.columnIndex="0" GridPane.rowIndex="4"/>
+                        <TextField fx:id="tfOutputFolder" GridPane.columnIndex="1" GridPane.rowIndex="4"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <columnConstraints>
+                            <ColumnConstraints minWidth="140"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                            <ColumnConstraints minWidth="30"/>
+                        </columnConstraints>
+                    </GridPane>
+                </TitledPane>
+
+                <!-- Files section -->
+                <TitledPane text="Files" animated="false" collapsible="false">
+                    <GridPane hgap="8" vgap="6">
+                        <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+
+                        <Label text="Collecte filename:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <TextField fx:id="tfCollecteFile" GridPane.columnIndex="1" GridPane.rowIndex="0"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Stub template:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <TextField fx:id="tfStubTemplate" GridPane.columnIndex="1" GridPane.rowIndex="1"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Bible template:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                        <TextField fx:id="tfBibleTemplate" GridPane.columnIndex="1" GridPane.rowIndex="2"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Output pattern:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
+                        <TextField fx:id="tfOutputPattern" GridPane.columnIndex="1" GridPane.rowIndex="3"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Excel register:" GridPane.columnIndex="0" GridPane.rowIndex="4"/>
+                        <TextField fx:id="tfExcelRegister" GridPane.columnIndex="1" GridPane.rowIndex="4"
+                                   GridPane.hgrow="ALWAYS"/>
+                        <Button text="…" onAction="#onBrowseExcel"
+                                GridPane.columnIndex="2" GridPane.rowIndex="4"/>
+
+                        <Label text="PPTX archive:" GridPane.columnIndex="0" GridPane.rowIndex="5"/>
+                        <TextField fx:id="tfPptxArchive" GridPane.columnIndex="1" GridPane.rowIndex="5"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <columnConstraints>
+                            <ColumnConstraints minWidth="140"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                            <ColumnConstraints minWidth="30"/>
+                        </columnConstraints>
+                    </GridPane>
+                </TitledPane>
+
+                <!-- Song cover section -->
+                <TitledPane text="Song cover slide" animated="false" collapsible="false">
+                    <VBox spacing="6">
+                        <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+                        <CheckBox fx:id="cbSongCover" text="Add song cover slide"/>
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <Label text="Cover file:" minWidth="100"/>
+                            <TextField fx:id="tfSongCoverFile" HBox.hgrow="ALWAYS"/>
+                        </HBox>
+                    </VBox>
+                </TitledPane>
+
+                <!-- Bible settings -->
+                <TitledPane text="Bible slides" animated="false" collapsible="false">
+                    <GridPane hgap="8" vgap="6">
+                        <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+
+                        <Label text="Font:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <TextField fx:id="tfBibleFont" GridPane.columnIndex="1" GridPane.rowIndex="0"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <Label text="Font size:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <Spinner fx:id="spBibleFontSize" editable="true" prefWidth="80"
+                                 GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+
+                        <Label text="Chars/slide:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                        <Spinner fx:id="spBibleCharsPerSlide" editable="true" prefWidth="90"
+                                 GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+
+                        <CheckBox fx:id="cbShowVerseNumbers" text="Show verse numbers"
+                                  GridPane.columnIndex="0" GridPane.rowIndex="3" GridPane.columnSpan="3"/>
+
+                        <Label text="YouVersion API key:" GridPane.columnIndex="0" GridPane.rowIndex="4"/>
+                        <TextField fx:id="tfYouVersionKey" GridPane.columnIndex="1" GridPane.rowIndex="4"
+                                   GridPane.hgrow="ALWAYS" GridPane.columnSpan="2"/>
+
+                        <columnConstraints>
+                            <ColumnConstraints minWidth="140"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                            <ColumnConstraints minWidth="30"/>
+                        </columnConstraints>
+                    </GridPane>
+                </TitledPane>
+
+                <!-- Language -->
+                <TitledPane text="Interface" animated="false" collapsible="false">
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+                        <Label text="Language:" minWidth="100"/>
+                        <ComboBox fx:id="cbLanguage" prefWidth="120"/>
+                    </HBox>
+                </TitledPane>
+
+            </VBox>
+        </ScrollPane>
+    </center>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_RIGHT">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <Button fx:id="btnSave" text="Save" onAction="#onSave" defaultButton="true"/>
+            <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+        </HBox>
+    </bottom>
+</BorderPane>

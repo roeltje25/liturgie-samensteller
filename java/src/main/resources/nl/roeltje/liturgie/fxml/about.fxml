@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="nl.roeltje.liturgie.ui.AboutController"
+      spacing="12" alignment="CENTER" prefWidth="380" prefHeight="260">
+  <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+  <Label fx:id="lblTitle" styleClass="title-label"/>
+  <Label fx:id="lblVersion"/>
+  <Label fx:id="lblDescription" wrapText="true" textAlignment="CENTER"/>
+  <Separator/>
+  <Label fx:id="lblJava"/>
+  <Label fx:id="lblOs"/>
+  <Button fx:id="btnClose" onAction="#onClose" defaultButton="true"/>
+</VBox>

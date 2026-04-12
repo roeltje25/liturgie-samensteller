@@ -1,0 +1,102 @@
+/* ============================================================
+   Liturgie Samensteller – app-level CSS overrides
+   Applied on top of AtlantaFX PrimerLight theme.
+   ============================================================ */
+
+/* ----- Root / global ----- */
+.root {
+    -fx-font-family: "Segoe UI", "Noto Sans", sans-serif;
+    -fx-font-size: 13px;
+}
+
+/* ----- Menu bar ----- */
+.menu-bar {
+    -fx-padding: 2px 4px;
+}
+
+/* ----- Toolbar / action buttons on left panel ----- */
+.action-button {
+    -fx-min-width: 160px;
+    -fx-pref-width: 180px;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 5px 10px;
+}
+
+/* ----- Liturgy TreeView ----- */
+.liturgy-tree {
+    -fx-fixed-cell-size: 26px;
+}
+
+.liturgy-tree .tree-cell {
+    -fx-padding: 2px 4px;
+}
+
+/* Red text for slides with unfilled required fields */
+.tree-cell-error {
+    -fx-text-fill: #d32f2f;
+    -fx-font-weight: bold;
+}
+
+/* Section rows: slightly bolder */
+.tree-cell-section {
+    -fx-font-weight: bold;
+}
+
+/* ----- Status bar ----- */
+.status-bar {
+    -fx-padding: 3px 8px;
+    -fx-background-color: -color-bg-subtle;
+    -fx-border-color: -color-border-default;
+    -fx-border-width: 1px 0 0 0;
+    -fx-font-size: 11px;
+}
+
+/* ----- Warning / info labels ----- */
+.warning-label {
+    -fx-text-fill: #856404;
+    -fx-background-color: #fff3cd;
+    -fx-border-color: #ffecb5;
+    -fx-border-width: 1px;
+    -fx-padding: 4px 8px;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+    -fx-font-size: 12px;
+}
+
+/* ----- Song picker thumbnail ----- */
+.song-thumbnail {
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 1);
+    -fx-border-color: -color-border-default;
+    -fx-border-width: 1px;
+}
+
+/* ----- Dialogs: consistent title bar spacing ----- */
+.dialog-pane .header-panel {
+    -fx-padding: 10px 15px;
+}
+
+/* ----- TableView / ListView ----- */
+.table-view .column-header-background {
+    -fx-background-color: -color-bg-subtle;
+}
+
+/* ----- Export progress bar accent ----- */
+.progress-bar:succeeded > .bar {
+    -fx-background-color: -color-success-emphasis;
+}
+
+/* ----- TitledPane header ----- */
+.titled-pane > .title {
+    -fx-background-color: -color-bg-subtle;
+    -fx-font-weight: bold;
+    -fx-padding: 4px 8px;
+}
+
+/* ----- Quick Liturgy match table ----- */
+.match-high {
+    -fx-text-fill: #1a7f37;
+}
+
+.match-low {
+    -fx-text-fill: #d32f2f;
+}

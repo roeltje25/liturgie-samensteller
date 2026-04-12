@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.NewSongController"
+            prefWidth="520" prefHeight="460">
+
+    <top>
+        <GridPane hgap="8" vgap="8">
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <Label text="Song title:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+            <TextField fx:id="tfTitle" promptText="Song title" GridPane.columnIndex="1" GridPane.rowIndex="0"
+                       GridPane.hgrow="ALWAYS"/>
+            <Label text="Subfolder:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+            <TextField fx:id="tfSubfolder" promptText="Optional subfolder (e.g. Psalmen)"
+                       GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.hgrow="ALWAYS"/>
+            <columnConstraints>
+                <ColumnConstraints minWidth="80"/>
+                <ColumnConstraints hgrow="ALWAYS"/>
+            </columnConstraints>
+        </GridPane>
+    </top>
+
+    <center>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
+            <Label text="Lyrics (blank line = new slide):" style="-fx-font-weight: bold;"/>
+            <TextArea fx:id="taLyrics" VBox.vgrow="ALWAYS" promptText="Verse 1 line 1&#10;Verse 1 line 2&#10;&#10;Verse 2 line 1&#10;Verse 2 line 2"
+                      wrapText="true"/>
+            <Label fx:id="lblPreview" text="0 slides will be created"/>
+        </VBox>
+    </center>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_RIGHT">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <Button fx:id="btnCreate" text="Create" onAction="#onCreate" defaultButton="true"/>
+            <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+        </HBox>
+    </bottom>
+</BorderPane>

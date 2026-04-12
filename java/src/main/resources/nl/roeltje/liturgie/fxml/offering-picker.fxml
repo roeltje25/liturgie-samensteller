@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="nl.roeltje.liturgie.ui.OfferingPickerController"
+            prefWidth="450" prefHeight="400">
+  <center>
+    <VBox spacing="6"><padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+      <ProgressIndicator fx:id="spinner"/>
+      <ListView fx:id="listView" VBox.vgrow="ALWAYS"/>
+      <Label fx:id="lblPreview" wrapText="true"/>
+    </VBox>
+  </center>
+  <bottom>
+    <HBox spacing="8" alignment="CENTER_RIGHT"><padding><Insets top="8" bottom="8" right="8"/></padding>
+      <Button fx:id="btnSelect" defaultButton="true" onAction="#onSelect"/>
+      <Button fx:id="btnCancel" cancelButton="true" onAction="#onCancel"/>
+    </HBox>
+  </bottom>
+</BorderPane>

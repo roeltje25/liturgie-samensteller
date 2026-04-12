@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.ExportController"
+            prefWidth="420" prefHeight="300">
+
+    <top>
+        <VBox spacing="8">
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Label text="Filename:" minWidth="80"/>
+                <TextField fx:id="tfFilename" HBox.hgrow="ALWAYS" promptText="Output filename"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <VBox spacing="10">
+            <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
+            <Label text="Export options:" style="-fx-font-weight: bold;"/>
+            <CheckBox fx:id="cbPptx" text="PowerPoint (.pptx)"/>
+            <CheckBox fx:id="cbPdf" text="PDF archive (.zip)"/>
+            <CheckBox fx:id="cbTxt" text="YouTube links (.txt)"/>
+            <CheckBox fx:id="cbExcel" text="Update Excel register"/>
+            <Separator/>
+            <CheckBox fx:id="cbOpenAfter" text="Open output folder after export"/>
+        </VBox>
+    </center>
+
+    <bottom>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <ProgressBar fx:id="progressBar" maxWidth="Infinity"/>
+            <HBox spacing="8" alignment="CENTER_RIGHT">
+                <Label fx:id="lblProgress" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnExport" text="Export" onAction="#onExport" defaultButton="true"/>
+                <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+            </HBox>
+        </VBox>
+    </bottom>
+</BorderPane>

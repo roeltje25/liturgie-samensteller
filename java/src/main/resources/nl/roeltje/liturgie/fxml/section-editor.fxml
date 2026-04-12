@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.SectionEditorController"
+            prefWidth="500" prefHeight="420">
+
+    <top>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <Label text="Section name:" minWidth="100"/>
+            <TextField fx:id="tfSectionName" HBox.hgrow="ALWAYS"/>
+        </HBox>
+    </top>
+
+    <center>
+        <TabPane fx:id="tabPane">
+            <padding><Insets top="0" right="12" bottom="0" left="12"/></padding>
+
+            <!-- Fields tab -->
+            <Tab text="Fields" closable="false">
+                <TableView fx:id="fieldsTable" editable="true">
+                    <columns>
+                        <TableColumn fx:id="colField" text="Field" prefWidth="180"/>
+                        <TableColumn fx:id="colValue" text="Value" prefWidth="280"/>
+                    </columns>
+                </TableView>
+            </Tab>
+
+            <!-- YouTube tab -->
+            <Tab text="YouTube links" closable="false">
+                <VBox spacing="8">
+                    <padding><Insets top="8" right="0" bottom="0" left="0"/></padding>
+                    <ListView fx:id="lstYoutube" VBox.vgrow="ALWAYS"/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <TextField fx:id="tfNewYoutubeLink" promptText="https://youtube.com/watch?v=..."
+                                   HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="btnAddLink" text="Add" onAction="#onAddLink"/>
+                        <Button fx:id="btnRemoveLink" text="Remove" onAction="#onRemoveLink"/>
+                    </HBox>
+                </VBox>
+            </Tab>
+        </TabPane>
+    </center>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_RIGHT">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <Button fx:id="btnSave" text="Save" onAction="#onSave" defaultButton="true"/>
+            <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+        </HBox>
+    </bottom>
+</BorderPane>

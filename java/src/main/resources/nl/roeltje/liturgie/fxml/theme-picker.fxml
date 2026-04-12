@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.ThemePickerController"
+            prefWidth="480" prefHeight="420">
+
+    <top>
+        <VBox spacing="6">
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Label text="Theme file:" minWidth="90"/>
+                <Label fx:id="lblThemeFile" text="(no file selected)" style="-fx-font-style: italic;" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnBrowse" text="Browse…" onAction="#onBrowse"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
+            <Label text="Select sections to add (Ctrl+click for multiple):"
+                   style="-fx-font-weight: bold;"/>
+            <TreeView fx:id="themeTree" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </center>
+
+    <bottom>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <Label fx:id="lblStatus"/>
+            <HBox spacing="8" alignment="CENTER_RIGHT">
+                <Button fx:id="btnAdd" text="Add selected" onAction="#onAdd" defaultButton="true"/>
+                <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+            </HBox>
+        </VBox>
+    </bottom>
+</BorderPane>

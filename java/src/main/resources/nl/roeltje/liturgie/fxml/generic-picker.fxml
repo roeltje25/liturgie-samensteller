@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="nl.roeltje.liturgie.ui.GenericPickerController"
+            prefWidth="450" prefHeight="400">
+  <top><TextField fx:id="tfSearch" promptText="Zoeken..."><BorderPane.margin><Insets bottom="6"/></BorderPane.margin></TextField></top>
+  <center><ListView fx:id="listView"/></center>
+  <bottom>
+    <HBox spacing="8" alignment="CENTER_RIGHT"><padding><Insets top="8" bottom="8" right="8"/></padding>
+      <Button fx:id="btnSelect" defaultButton="true" onAction="#onSelect"/>
+      <Button fx:id="btnCancel" cancelButton="true" onAction="#onCancel"/>
+    </HBox>
+  </bottom>
+</BorderPane>

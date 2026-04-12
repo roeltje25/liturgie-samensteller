@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.ImportPptxController"
+            prefWidth="600" prefHeight="440">
+
+    <top>
+        <VBox spacing="8">
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Label text="PPTX folder:" minWidth="90"/>
+                <TextField fx:id="tfFolder" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnBrowse" text="Browse…" onAction="#onBrowse"/>
+                <Button fx:id="btnScan" text="Scan" onAction="#onScan"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
+            <TableView fx:id="table" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="colFile" text="File" prefWidth="220"/>
+                    <TableColumn fx:id="colDate" text="Date" prefWidth="100"/>
+                    <TableColumn fx:id="colSongs" text="Songs found" prefWidth="140"/>
+                </columns>
+                <columnResizePolicy>
+                    <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+                </columnResizePolicy>
+            </TableView>
+        </VBox>
+    </center>
+
+    <bottom>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <ProgressBar fx:id="progressBar" maxWidth="Infinity"/>
+            <HBox spacing="8" alignment="CENTER_RIGHT">
+                <Label fx:id="lblStatus" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnImport" text="Import from Excel" onAction="#onImportExcel"/>
+                <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+            </HBox>
+        </VBox>
+    </bottom>
+</BorderPane>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="nl.roeltje.liturgie.ui.YouTubeController"
+            prefWidth="600" prefHeight="450">
+  <top>
+    <HBox spacing="8"><padding><Insets bottom="6"/></Insets></padding>
+      <TextField fx:id="tfSearch" HBox.hgrow="ALWAYS" promptText="Zoeken..."/>
+      <Button fx:id="btnSearch" onAction="#onSearch"/>
+      <ProgressIndicator fx:id="spinner" prefWidth="24" prefHeight="24"/>
+    </HBox>
+  </top>
+  <center>
+    <VBox spacing="4"><padding><Insets top="4"/></Insets></padding>
+      <Label fx:id="lblStatus"/>
+      <ListView fx:id="lstResults" VBox.vgrow="ALWAYS"/>
+    </VBox>
+  </center>
+  <bottom>
+    <HBox spacing="8" alignment="CENTER_RIGHT"><padding><Insets top="8" bottom="8" right="8"/></padding>
+      <Button fx:id="btnSave" defaultButton="true" onAction="#onSave"/>
+      <Button fx:id="btnCancel" cancelButton="true" onAction="#onCancel"/>
+    </HBox>
+  </bottom>
+</BorderPane>

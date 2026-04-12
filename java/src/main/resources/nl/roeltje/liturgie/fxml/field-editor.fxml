@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.FieldEditorController"
+            prefWidth="460" prefHeight="360">
+
+    <top>
+        <VBox>
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <Label text="Edit fields across all slides. Double-click a value to edit."
+                   wrapText="true"/>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="table" editable="true">
+            <padding><Insets top="0" right="12" bottom="0" left="12"/></padding>
+            <columns>
+                <TableColumn fx:id="colField" text="Field name" prefWidth="160"/>
+                <TableColumn fx:id="colValue" text="Value" prefWidth="200"/>
+                <TableColumn fx:id="colCount" text="# slides" prefWidth="70"/>
+            </columns>
+            <columnResizePolicy>
+                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+            </columnResizePolicy>
+        </TableView>
+    </center>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_RIGHT">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <Button fx:id="btnApply" text="Apply" onAction="#onApply" defaultButton="true"/>
+            <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+        </HBox>
+    </bottom>
+</BorderPane>

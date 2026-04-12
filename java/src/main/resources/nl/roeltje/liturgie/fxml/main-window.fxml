@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="nl.roeltje.liturgie.ui.MainController"
+            prefWidth="1200" prefHeight="800">
+
+    <!-- ── Menu bar ── -->
+    <top>
+        <MenuBar fx:id="menuBar">
+            <Menu fx:id="menuFile" text="Bestand">
+                <MenuItem fx:id="menuNew"        text="Nieuwe liturgie"          accelerator="Ctrl+N"          onAction="#onNew"/>
+                <MenuItem fx:id="menuOpen"       text="Liturgie openen..."       accelerator="Ctrl+O"          onAction="#onOpen"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuSave"       text="Liturgie opslaan"         accelerator="Ctrl+S"          onAction="#onSave"/>
+                <MenuItem fx:id="menuSaveAs"     text="Liturgie opslaan als..."  accelerator="Ctrl+Shift+S"    onAction="#onSaveAs"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuExport"     text="Exporteren..."            accelerator="Ctrl+E"          onAction="#onExport"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuOpenTheme"  text="Thema sjabloon openen..." onAction="#onOpenTheme"/>
+                <MenuItem fx:id="menuSaveTheme"  text="Opslaan als thema..."     onAction="#onSaveAsTheme"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuExit"       text="Afsluiten"                accelerator="Alt+F4"          onAction="#onExit"/>
+            </Menu>
+            <Menu fx:id="menuEdit" text="Bewerken">
+                <MenuItem fx:id="menuDelete"    text="Verwijderen"  accelerator="Delete"       onAction="#onDelete"/>
+                <MenuItem fx:id="menuMoveUp"    text="Omhoog"       accelerator="Ctrl+Up"      onAction="#onMoveUp"/>
+                <MenuItem fx:id="menuMoveDown"  text="Omlaag"       accelerator="Ctrl+Down"    onAction="#onMoveDown"/>
+            </Menu>
+            <Menu fx:id="menuTools" text="Extra">
+                <MenuItem fx:id="menuCheckLinks"  text="YouTube links controleren"    onAction="#onCheckLinks"/>
+                <MenuItem fx:id="menuEditFields"  text="Alle velden bewerken..."      onAction="#onEditFields"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuAddBible"    text="Bijbeltekst dia's toevoegen..." onAction="#onAddBible"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuImportPptx" text="Importeren uit PPTX archief..." onAction="#onImportPptx"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuSettings"   text="Instellingen..."               onAction="#onSettings"/>
+            </Menu>
+            <Menu fx:id="menuHelp" text="Help">
+                <MenuItem fx:id="menuShortcuts" text="Sneltoetsen (F1)"       accelerator="F1"  onAction="#onShortcuts"/>
+                <MenuItem fx:id="menuWorkflow"  text="Wekelijkse Werkwijze"              onAction="#onWorkflow"/>
+                <SeparatorMenuItem/>
+                <MenuItem fx:id="menuAbout"     text="Over..."                           onAction="#onAbout"/>
+            </Menu>
+            <!-- Language selector rendered programmatically in MainController -->
+        </MenuBar>
+    </top>
+
+    <!-- ── Main content ── -->
+    <center>
+        <SplitPane dividerPositions="0.25">
+            <!-- Left panel: Add-item buttons -->
+            <VBox spacing="4" styleClass="left-panel">
+                <padding><Insets top="10" right="8" bottom="10" left="8"/></padding>
+                <Label fx:id="lblAddItems" text="Items toevoegen" styleClass="panel-heading"/>
+                <Button fx:id="btnAddSong"      text="Lied toevoegen"           maxWidth="Infinity" onAction="#onAddSong"/>
+                <Button fx:id="btnQuickFill"    text="Liederen invullen…"        maxWidth="Infinity" onAction="#onQuickFill"/>
+                <Button fx:id="btnCreateSong"   text="Nieuw lied maken"          maxWidth="Infinity" onAction="#onCreateSong"/>
+                <Separator/>
+                <Button fx:id="btnAddGeneric"   text="Algemeen toevoegen"        maxWidth="Infinity" onAction="#onAddGeneric"/>
+                <Button fx:id="btnAddOffering"  text="Collecte toevoegen"        maxWidth="Infinity" onAction="#onAddOffering"/>
+                <Button fx:id="btnAddTheme"     text="Uit thema toevoegen"       maxWidth="Infinity" onAction="#onAddFromTheme"/>
+                <Separator/>
+                <Button fx:id="btnAddSection"   text="Lege sectie toevoegen"     maxWidth="Infinity" onAction="#onAddSection"/>
+                <Button fx:id="btnAddPptx"      text="PowerPoint toevoegen..."   maxWidth="Infinity" onAction="#onAddPptx"/>
+                <Button fx:id="btnAddBible"     text="Bijbeltekst toevoegen..."  maxWidth="Infinity" onAction="#onAddBible"/>
+                <Separator/>
+                <Button fx:id="btnEditFields"   text="Alle velden bewerken"      maxWidth="Infinity" onAction="#onEditFields"/>
+                <Button fx:id="btnShare"        text="Delen"                     maxWidth="Infinity" onAction="#onShare"/>
+            </VBox>
+
+            <!-- Right panel: Service info + liturgy tree -->
+            <VBox spacing="6">
+                <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+
+                <!-- Service info -->
+                <TitledPane fx:id="paneServiceInfo" text="Dienstinformatie" collapsible="false">
+                    <GridPane hgap="8" vgap="6">
+                        <padding><Insets top="6" right="6" bottom="6" left="6"/></padding>
+                        <Label text="Datum dienst:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <DatePicker fx:id="datePicker" GridPane.columnIndex="1" GridPane.rowIndex="0"
+                                    GridPane.hgrow="ALWAYS"/>
+                        <Label text="Dienstleider:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <TextField fx:id="tfLeider" promptText="Voer naam in..."
+                                   GridPane.columnIndex="1" GridPane.rowIndex="1"
+                                   GridPane.hgrow="ALWAYS"/>
+                        <columnConstraints>
+                            <ColumnConstraints/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                        </columnConstraints>
+                    </GridPane>
+                </TitledPane>
+
+                <!-- Warning banner (hidden when no warnings) -->
+                <Label fx:id="lblWarning" styleClass="warning-label" managed="false" visible="false"
+                       wrapText="true" maxWidth="Infinity"/>
+
+                <!-- Liturgy tree -->
+                <Label fx:id="lblLiturgy" text="Huidige liturgie" styleClass="panel-heading"/>
+                <TreeView fx:id="liturgyTree" VBox.vgrow="ALWAYS"/>
+
+                <!-- Action buttons below tree -->
+                <HBox spacing="8">
+                    <Button fx:id="btnDelete" text="Verwijderen" onAction="#onDelete"/>
+                    <Button fx:id="btnEdit"   text="Bewerken"    onAction="#onEdit"/>
+                </HBox>
+            </VBox>
+        </SplitPane>
+    </center>
+
+    <!-- ── Status bar ── -->
+    <bottom>
+        <HBox styleClass="status-bar">
+            <padding><Insets top="4" right="8" bottom="4" left="8"/></padding>
+            <Label fx:id="lblStatus" text="Gereed"/>
+        </HBox>
+    </bottom>
+</BorderPane>

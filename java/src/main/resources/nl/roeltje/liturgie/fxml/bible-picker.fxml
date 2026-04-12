@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="nl.roeltje.liturgie.ui.BiblePickerController"
+            prefWidth="760" prefHeight="540">
+
+    <top>
+        <VBox spacing="6" BorderPane.alignment="CENTER">
+            <padding><Insets top="12" right="12" bottom="6" left="12"/></padding>
+            <Label fx:id="lblApiKeyWarning" styleClass="warning-label"
+                   text="⚠ No YouVersion API key configured" wrapText="true"/>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Label text="Reference:" minWidth="100"/>
+                <TextField fx:id="tfReference" promptText="e.g. John 3:16-17" HBox.hgrow="ALWAYS"/>
+                <Button text="Preview" onAction="#onFetchPreview"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.35, 0.6" BorderPane.alignment="CENTER">
+            <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
+
+            <!-- Available translations -->
+            <VBox spacing="4">
+                <Label text="Available translations:" style="-fx-font-weight: bold;"/>
+                <ComboBox fx:id="cbLanguage" promptText="Language filter" maxWidth="Infinity"/>
+                <ListView fx:id="lstAvailable" VBox.vgrow="ALWAYS"/>
+                <Button text="Add →" onAction="#onAddTranslation" maxWidth="Infinity"/>
+            </VBox>
+
+            <!-- Selected translations -->
+            <VBox spacing="4">
+                <Label text="Selected (max 6):" style="-fx-font-weight: bold;"/>
+                <ListView fx:id="lstSelected" VBox.vgrow="ALWAYS"/>
+                <Button text="← Remove" onAction="#onRemoveTranslation" maxWidth="Infinity"/>
+            </VBox>
+
+            <!-- Preview -->
+            <VBox spacing="4">
+                <Label text="Preview:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="taPreview" VBox.vgrow="ALWAYS" editable="false" wrapText="true"/>
+            </VBox>
+        </SplitPane>
+    </center>
+
+    <bottom>
+        <VBox spacing="6">
+            <padding><Insets top="6" right="12" bottom="12" left="12"/></padding>
+            <!-- Slide settings -->
+            <TitledPane text="Slide settings" animated="false" collapsible="false">
+                <GridPane hgap="8" vgap="4">
+                    <padding><Insets top="6" right="8" bottom="6" left="8"/></padding>
+                    <Label text="Font:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                    <TextField fx:id="tfFontName" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                    <Label text="Font size:" GridPane.columnIndex="2" GridPane.rowIndex="0"/>
+                    <Spinner fx:id="spFontSize" editable="true" GridPane.columnIndex="3" GridPane.rowIndex="0" prefWidth="70"/>
+                    <Label text="Chars/slide:" GridPane.columnIndex="4" GridPane.rowIndex="0"/>
+                    <Spinner fx:id="spCharsPerSlide" editable="true" GridPane.columnIndex="5" GridPane.rowIndex="0" prefWidth="80"/>
+                </GridPane>
+            </TitledPane>
+            <HBox spacing="8" alignment="CENTER_RIGHT">
+                <ProgressIndicator fx:id="spinner" prefWidth="24" prefHeight="24"/>
+                <Label fx:id="lblStatus" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnGenerate" text="Generate" onAction="#onGenerate" defaultButton="true"/>
+                <Button fx:id="btnCancel" text="Cancel" onAction="#onCancel"/>
+            </HBox>
+        </VBox>
+    </bottom>
+</BorderPane>

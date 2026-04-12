@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>nl.roeltje</groupId>
+    <artifactId>liturgie-samensteller</artifactId>
+    <version>1.2.2</version>
+    <packaging>jar</packaging>
+    <name>Liturgie Samensteller</name>
+    <description>Church service PowerPoint presentation builder</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Java 21 for GraalVM/GluonFX compatibility; bump to 25 once GluonFX supports it -->
+        <java.version>21</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+
+        <!-- Dependency versions -->
+        <javafx.version>21.0.4</javafx.version>
+        <atlantafx.version>2.0.1</atlantafx.version>
+        <poi.version>5.3.0</poi.version>
+        <jackson.version>2.17.1</jackson.version>
+        <logback.version>1.5.6</logback.version>
+        <slf4j.version>2.0.13</slf4j.version>
+
+        <!-- GluonFX native build -->
+        <gluonfx.plugin.version>1.0.22</gluonfx.plugin.version>
+        <gluonfx.main.class>nl.roeltje.liturgie.Main</gluonfx.main.class>
+    </properties>
+
+    <dependencies>
+        <!-- ── JavaFX ── -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-swing</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- ── AtlantaFX modern theme ── -->
+        <dependency>
+            <groupId>io.github.mkpaz</groupId>
+            <artifactId>atlantafx-base</artifactId>
+            <version>${atlantafx.version}</version>
+        </dependency>
+
+        <!-- ── Apache POI – PPTX + XLSX ── -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+
+        <!-- ── Jackson – JSON serialization ── -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+        <!-- ── Logging ── -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- ── Testing ── -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Standard compiler -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+
+            <!-- Fat JAR for dev runs and as input to native-image -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                    <archive>
+                        <manifest>
+                            <mainClass>${gluonfx.main.class}</mainClass>
+                        </manifest>
+                    </archive>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                </configuration>
+            </plugin>
+
+            <!-- JavaFX dev runner: mvn javafx:run -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>${gluonfx.main.class}</mainClass>
+                    <options>
+                        <option>-Dfile.encoding=UTF-8</option>
+                    </options>
+                </configuration>
+            </plugin>
+
+            <!-- GluonFX native build: mvn gluonfx:build  (requires GraalVM JDK + MSVC on Windows) -->
+            <plugin>
+                <groupId>com.gluonhq</groupId>
+                <artifactId>gluonfx-maven-plugin</artifactId>
+                <version>${gluonfx.plugin.version}</version>
+                <configuration>
+                    <target>host</target>
+                    <mainClass>${gluonfx.main.class}</mainClass>
+
+                    <!-- Classes needing Jackson / reflection -->
+                    <reflectionList>
+                        <list>nl.roeltje.liturgie.models.Settings</list>
+                        <list>nl.roeltje.liturgie.models.Liturgy</list>
+                        <list>nl.roeltje.liturgie.models.LiturgySection</list>
+                        <list>nl.roeltje.liturgie.models.LiturgySlide</list>
+                        <list>nl.roeltje.liturgie.models.Song</list>
+                        <list>nl.roeltje.liturgie.models.SectionType</list>
+                        <list>nl.roeltje.liturgie.ui.MainController</list>
+                        <list>nl.roeltje.liturgie.ui.SongPickerController</list>
+                        <list>nl.roeltje.liturgie.ui.NewSongController</list>
+                        <list>nl.roeltje.liturgie.ui.GenericPickerController</list>
+                        <list>nl.roeltje.liturgie.ui.OfferingPickerController</list>
+                        <list>nl.roeltje.liturgie.ui.BiblePickerController</list>
+                        <list>nl.roeltje.liturgie.ui.ThemePickerController</list>
+                        <list>nl.roeltje.liturgie.ui.YouTubeController</list>
+                        <list>nl.roeltje.liturgie.ui.ImportPptxController</list>
+                        <list>nl.roeltje.liturgie.ui.SettingsController</list>
+                        <list>nl.roeltje.liturgie.ui.ExportController</list>
+                        <list>nl.roeltje.liturgie.ui.QuickLiturgyController</list>
+                        <list>nl.roeltje.liturgie.ui.SectionEditorController</list>
+                        <list>nl.roeltje.liturgie.ui.FieldEditorController</list>
+                        <list>nl.roeltje.liturgie.ui.AboutController</list>
+                    </reflectionList>
+
+                    <!-- Resources to bundle -->
+                    <resourcesList>
+                        <list>.*\.fxml</list>
+                        <list>.*\.json</list>
+                        <list>.*\.css</list>
+                        <list>.*\.xml</list>
+                        <list>.*\.png</list>
+                        <list>.*\.ico</list>
+                    </resourcesList>
+
+                    <nativeImageArgs>
+                        <arg>--initialize-at-build-time=org.slf4j,ch.qos.logback</arg>
+                        <arg>--initialize-at-build-time=com.fasterxml.jackson</arg>
+                        <arg>-H:+ReportExceptionStackTraces</arg>
+                        <arg>--no-fallback</arg>
+                    </nativeImageArgs>
+                </configuration>
+            </plugin>
+
+            <!-- Surefire for JUnit 5 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

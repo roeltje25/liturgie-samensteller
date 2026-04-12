@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="nl.roeltje.liturgie.ui.QuickLiturgyController"
+            prefWidth="600" prefHeight="500">
+  <top>
+    <VBox spacing="6"><padding><Insets bottom="8"/></padding>
+      <Label text="Liederen invoeren (één per regel):"/>
+      <TextArea fx:id="taInput" prefRowCount="8"/>
+      <Button fx:id="btnMatch" onAction="#onMatch"/>
+    </VBox>
+  </top>
+  <center>
+    <TableView fx:id="tableResults">
+      <columns>
+        <TableColumn fx:id="colTyped" text="Getypt" prefWidth="200"/>
+        <TableColumn fx:id="colMatched" text="Gevonden" prefWidth="200"/>
+      </columns>
+    </TableView>
+  </center>
+  <bottom>
+    <HBox spacing="8" alignment="CENTER_RIGHT"><padding><Insets top="8" bottom="8" right="8"/></padding>
+      <Button fx:id="btnAdd" defaultButton="true" onAction="#onAdd"/>
+      <Button fx:id="btnCancel" cancelButton="true" onAction="#onCancel"/>
+    </HBox>
+  </bottom>
+</BorderPane>
